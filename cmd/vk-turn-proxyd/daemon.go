@@ -297,6 +297,7 @@ func (d *daemon) startProxy() {
 		CaptchaSolver: noCaptchaUI,
 		GOMAXPROCS:    -1,
 		CredPoolSize:  size,
+		SpreadRelays:  c.SpreadRelays,
 	})
 	go func() {
 		if err := d.p.Start(); err != nil {
@@ -445,7 +446,7 @@ func linkStep(up, live bool, deadSince, now time.Time, downAfter time.Duration) 
 
 func (d *daemon) serve(ctx context.Context) int {
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGHUP, syscall.SIGUSR1)
+	signal.Notify(sig, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGUSR2)
 	defer signal.Stop(sig)
 	var stats <-chan time.Time
 	if d.c.StatsEvery > 0 {
@@ -463,6 +464,10 @@ func (d *daemon) serve(ctx context.Context) int {
 			d.printStats()
 			return 0
 		case s := <-sig:
+			if s == syscall.SIGUSR2 {
+				d.profile()
+				continue
+			}
 			log.Printf("%v: reconnecting every connection", s)
 			d.p.ForceReconnect()
 		case <-stats:

@@ -1188,6 +1188,9 @@ type credCacheEntry struct {
 	Address  string `json:"address"`
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Addresses is the credential's whole turn_server.urls (Config.SpreadRelays
+	// dials them all); absent in files from before it — Address alone then.
+	Addresses []string `json:"addresses,omitempty"`
 	// LastUsedAt is the most recent moment a conn was holding a TURN
 	// allocation against this cred (Unix seconds, 0 = never used in
 	// this session). Drives the per-entry saturation-cooldown check
@@ -1773,9 +1776,10 @@ func (cp *credPool) loadFromDisk() {
 			continue
 		}
 		creds := &TURNCreds{
-			Username: entry.Username,
-			Password: entry.Password,
-			Address:  entry.Address,
+			Username:  entry.Username,
+			Password:  entry.Password,
+			Address:   entry.Address,
+			Addresses: cachedAddresses(entry),
 		}
 		exp, ok := parseCredExpiry(creds.Username)
 		if !ok {
@@ -1880,6 +1884,7 @@ func (cp *credPool) saveToDisk() {
 		f.Creds = append(f.Creds, credCacheEntry{
 			Slot:       slot,
 			Address:    entry.addr,
+			Addresses:  entry.creds.Addresses,
 			Username:   entry.creds.Username,
 			Password:   entry.creds.Password,
 			LastUsedAt: lastUsed,

@@ -74,6 +74,7 @@ config interface 'vkturn'
 	option turn_server ''                      # опционально: свой TURN host:port
 	option pool_reserve '1'
 	option uplink_pace '0'                     # KiB/s на соединение, 0 = выкл
+	option spread_relays '1'                   # соединения по всем релеям звонка, не только по первому
 	option vk_cookie_file ''                   # опционально: cookies.txt входа в VK
 	option stats_every '0'                     # секунд между строками stats в логе
 	option log_level 'info'                    # info | debug
@@ -117,6 +118,10 @@ ubus call vkturn status
 ubus call vkturn reconnect '{"interface":"vkturn"}'
 logread -e vkturn
 ```
+
+Профиль под нагрузкой: `kill -USR2 $(pidof vk-turn-proxyd)` — через 30 с рядом со статусом
+(`/var/run/vkturn/<iface>/`) появятся `cpu.pprof`, `mutex.pprof`, `block.pprof`; разбирать на
+компьютере: `go tool pprof -top cpu.pprof`.
 
 Если VK требует капчу, которую не прошёл автосолвер, статус показывает флаг и ссылку, а демон
 повторяет попытки (раз в 2 мин, под rate limit — раз в 10). Ручное решение из LuCI пока не

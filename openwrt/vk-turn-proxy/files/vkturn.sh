@@ -30,6 +30,7 @@ proto_vkturn_init_config() {
 	proto_config_add_string "turn_server"
 	proto_config_add_int "pool_reserve"
 	proto_config_add_int "uplink_pace"
+	proto_config_add_boolean "spread_relays"
 	proto_config_add_string "vk_cookie_file"
 	proto_config_add_string "cred_cache"
 	proto_config_add_string "fwmark"
@@ -67,11 +68,11 @@ proto_vkturn_setup() {
 	local cfg="$dir/config"
 
 	local peer private_key public_key preshared_key mtu keepalive conns \
-		turn_transport turn_server pool_reserve uplink_pace vk_cookie_file \
+		turn_transport turn_server pool_reserve uplink_pace spread_relays vk_cookie_file \
 		cred_cache fwmark bind_device dns_server down_after stats_every \
 		log_level simulate_captcha
 	json_get_vars peer private_key public_key preshared_key mtu keepalive conns \
-		turn_transport turn_server pool_reserve uplink_pace vk_cookie_file \
+		turn_transport turn_server pool_reserve uplink_pace spread_relays vk_cookie_file \
 		cred_cache fwmark bind_device dns_server down_after stats_every \
 		log_level simulate_captcha
 
@@ -116,6 +117,7 @@ proto_vkturn_setup() {
 		vkturn_line turn_server "$turn_server" &&
 		vkturn_line pool_reserve "$pool_reserve" &&
 		vkturn_line uplink_pace "$uplink_pace" &&
+		vkturn_line spread_relays "$spread_relays" &&
 		vkturn_line vk_cookie_file "$vk_cookie_file" &&
 		vkturn_line cred_cache "${cred_cache:-/etc/vkturn/$config/creds.json}" &&
 		vkturn_line fwmark "$fwmark" &&

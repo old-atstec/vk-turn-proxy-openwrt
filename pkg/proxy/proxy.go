@@ -155,6 +155,11 @@ type Config struct {
 	// a phone switches networks often. Cookie mode keeps its one slot per relay
 	// whatever this says: the relays are a finite set.
 	CredPoolSize int
+
+	// SpreadRelays dials connection i on its credential's Addresses[i % n]
+	// instead of Addresses[0] — every relay VK returns for the call, not one
+	// (relayspread.go). Anonymous mode only; a router's setting, off in the app.
+	SpreadRelays bool
 }
 
 // Stats holds live tunnel statistics.
@@ -1794,6 +1799,9 @@ func (p *Proxy) GetStats() Stats {
 	}
 	poolFresh, poolWithCreds, poolSize := p.credPool.snapshotSize()
 	distinctRelays := p.credPool.distinctRelays()
+	if p.config.SpreadRelays && !cookieAuthEnabled.Load() {
+		distinctRelays = p.credPool.distinctRelaysAll()
+	}
 	quotaRefusals, mintPaused := p.credPool.quotaSnapshot()
 	return Stats{
 		TxBytes:                p.txBytes.Load(),
@@ -2267,7 +2275,11 @@ func (p *Proxy) directMode() bool {
 // relay/serverAddress mismatch is harmless. See
 // evaluated_alternatives_turn_endpoint_rotation.md.
 func (p *Proxy) resolveTURNAddr(connIdx int, allowCaptchaBlock bool) (string, *TURNCreds, int, error) {
-	return p.credPool.get(connIdx, allowCaptchaBlock)
+	addr, creds, slot, err := p.credPool.get(connIdx, allowCaptchaBlock)
+	if err == nil && p.config.SpreadRelays && !cookieAuthEnabled.Load() {
+		addr = spreadRelay(addr, creds, connIdx)
+	}
+	return addr, creds, slot, err
 }
 
 // wakeChannelFor is the channel a retry parks on after err. A park error

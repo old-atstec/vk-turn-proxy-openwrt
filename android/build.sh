@@ -51,7 +51,7 @@ fi
 pass=$(sed -n 's/^password=//p' "$ks/keystore.properties")
 
 # The password goes in by the environment, never on a command line.
-gradle_args=(--no-daemon --console=plain assembleRelease
+gradle_args=(--no-daemon --console=plain testReleaseUnitTest assembleRelease
 	-PvkturnKeystore=keystore/release.jks -PvkturnKeyAlias=vkturn)
 export ORG_GRADLE_PROJECT_vkturnKeystorePassword="$pass" ORG_GRADLE_PROJECT_vkturnKeyPassword="$pass"
 

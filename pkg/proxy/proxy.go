@@ -3479,6 +3479,7 @@ func (p *Proxy) runTURN(ctx context.Context, turnAddr string, creds *TURNCreds, 
 		Password:               creds.Password,
 		RequestedAddressFamily: addrFamily,
 		LoggerFactory:          &turnLoggerFactory{proxy: p, slot: slotIdx, life: gave.lifeOf()},
+		Net:                    turnNet(), // turnnet.go: no netlink on Android
 	}
 
 	client, err := turn.NewClient(cfg)
@@ -5628,6 +5629,7 @@ func (p *Proxy) setupSRTPSession(ctx context.Context, turnAddr string, creds *TU
 		// hardcoded IPv4, which 443'd ("Peer Address Family Mismatch") on an
 		// IPv6 peer (e.g. a DNS name resolving to AAAA) — issue #39.
 		RequestedAddressFamily: addrFamilyFor(p.peer),
+		Net:                    turnNet(), // turnnet.go: no netlink on Android
 	})
 	if err != nil {
 		_ = ctlConn.Close()

@@ -8,6 +8,8 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:descendantFocusability="beforeDescendants"
+        android:focusableInTouchMode="true"
         android:orientation="vertical"
         android:padding="16dp">
 
@@ -47,7 +49,7 @@
         <EditText
             android:id="@+id/peer"
             style="@style/Field"
-            android:hint="203.0.113.10:56004"
+            android:hint="например, 203.0.113.10:56004"
             android:inputType="textUri" />
 
         <TextView style="@style/Label" android:text="@string/server_key" />
@@ -135,7 +137,7 @@
         <EditText
             android:id="@+id/address"
             style="@style/Field"
-            android:hint="10.66.66.2/32"
+            android:hint="как на роутере, например 10.66.66.2/24"
             android:inputType="textUri" />
 
         <TextView style="@style/Label" android:text="@string/tunnel_dns" />

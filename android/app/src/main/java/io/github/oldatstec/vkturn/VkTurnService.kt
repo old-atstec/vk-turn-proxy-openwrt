@@ -15,6 +15,8 @@ import android.net.LocalServerSocket
 import android.net.LocalSocket
 import android.net.LocalSocketAddress
 import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.Handler
@@ -159,7 +161,8 @@ class VkTurnService : VpnService() {
         if (proc !== p) return
         proc = null
         if (stopping) return
-        fail("Демон остановился (код $code): ${Tunnel.lastLog() ?: "—"}")
+        val why = if (code > 128) "убит сигналом ${code - 128}" else "код $code"
+        fail("Демон остановился ($why): ${Tunnel.lastLog() ?: "—"}")
     }
 
     // --- the tun, on the daemon's request ---
@@ -255,6 +258,7 @@ class VkTurnService : VpnService() {
         }
     }
 
+    /** Called before the VPN is established: the active network is still the phone's. */
     private fun underlyingDns(): String {
         val cm = getSystemService(ConnectivityManager::class.java)
         return cm.activeNetwork?.let { cm.getLinkProperties(it) }?.let { pickDns(it) } ?: settings.fallbackDns
@@ -269,13 +273,21 @@ class VkTurnService : VpnService() {
 
     private fun watchNetwork() {
         val cm = getSystemService(ConnectivityManager::class.java)
-        // This app is outside its own VPN: its default network is the phone's.
+        // The physical network, asked for by name: the default-network
+        // callback of the VPN's own app reports the VPN once it is up, though
+        // the app is outside it (seen on the emulator, Android 15) — and the
+        // daemon then never heard of Wi-Fi giving way to mobile data.
+        val req = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
         val cb = object : ConnectivityManager.NetworkCallback() {
             private var current: Network? = null
             private var dns: String? = null
 
             override fun onAvailable(network: Network) {
                 current = network
+                Tunnel.addLog("app: the phone's network is now $network")
                 send("network $network")
             }
 
@@ -284,6 +296,7 @@ class VkTurnService : VpnService() {
                 val d = pickDns(lp) ?: settings.fallbackDns.ifEmpty { null } ?: return
                 if (d != dns) {
                     dns = d
+                    Tunnel.addLog("app: its DNS is $d")
                     send("dns $d")
                 }
             }
@@ -291,10 +304,15 @@ class VkTurnService : VpnService() {
             override fun onLost(network: Network) {
                 if (network != current) return
                 current = null
+                Tunnel.addLog("app: the phone has no network")
                 send("network none")
             }
         }
-        cm.registerDefaultNetworkCallback(cb)
+        if (Build.VERSION.SDK_INT >= 31) {
+            cm.registerBestMatchingNetworkCallback(req, cb, main)
+        } else {
+            cm.requestNetwork(req, cb) // the best match only: the system's own choice
+        }
         netCallback = cb
     }
 

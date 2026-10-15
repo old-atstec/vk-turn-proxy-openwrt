@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:Theme.Material.Light.DarkActionBar">
+        <item name="android:colorPrimary">#2b5797</item>
+        <item name="android:colorPrimaryDark">#1e3f6e</item>
+        <item name="android:colorAccent">#2b5797</item>
+        <!-- targetSdk 35 draws under the bars by default; these screens are not laid out for it -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

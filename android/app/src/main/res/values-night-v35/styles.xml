@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AppTheme" parent="android:Theme.Material">
+        <item name="android:colorPrimary">#1e3f6e</item>
+        <item name="android:colorPrimaryDark">#122a4a</item>
+        <item name="android:colorAccent">#7aa7e8</item>
+        <!-- targetSdk 35 draws under the bars by default; these screens are not laid out for it -->
+        <item name="android:windowOptOutEdgeToEdgeEnforcement">true</item>
+    </style>
+</resources>

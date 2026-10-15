@@ -56,6 +56,7 @@ type config struct {
 	TurnPort      string
 	PoolReserve   int
 	UplinkPaceKiB int
+	SpreadRelays  bool // every relay of the call, not the first (proxy.Config.SpreadRelays)
 	CookieFile    string
 	CredCache     string
 	Fwmark        uint32
@@ -78,12 +79,13 @@ var secretKeys = map[string]bool{"private_key": true, "preshared_key": true}
 
 func defaultConfig() config {
 	return config{
-		MTU:         mtuStandard,
-		Keepalive:   25,
-		Conns:       20,
-		UseUDP:      true,
-		PoolReserve: 1,
-		DownAfter:   60 * time.Second,
+		MTU:          mtuStandard,
+		Keepalive:    25,
+		Conns:        20,
+		UseUDP:       true,
+		PoolReserve:  1,
+		SpreadRelays: true,
+		DownAfter:    60 * time.Second,
 	}
 }
 
@@ -229,6 +231,8 @@ func (c *config) set(k, v string) error {
 		default:
 			err = errors.New("info or debug")
 		}
+	case "spread_relays":
+		c.SpreadRelays, err = boolOf(v)
 	case "wg_verbose":
 		c.WGVerbose, err = boolOf(v)
 	case "simulate_captcha":

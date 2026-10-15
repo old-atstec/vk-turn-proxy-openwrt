@@ -187,6 +187,10 @@ return network.registerProtocol('vkturn', {
 		o.datatype = 'uinteger';
 		o.placeholder = '0';
 
+		o = s.taboption('advanced', form.Flag, 'spread_relays', _('All relays of the call'),
+			_('Spread the connections over every TURN relay VK gives for the call, not only the first. Anonymous mode.'));
+		o.default = o.enabled;
+
 		o = s.taboption('advanced', form.Value, 'cred_cache', _('Credential cache'),
 			_('Where the TURN credentials are kept between restarts. On flash it survives a reboot; under <code>/var/run</code> it does not. Default: <code>/etc/vkturn/&lt;interface&gt;/creds.json</code>.'));
 		o.placeholder = '/etc/vkturn/<interface>/creds.json';

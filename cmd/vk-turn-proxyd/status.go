@@ -84,12 +84,18 @@ func writeStatus(path string, s *status) error {
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".status-*")
+	return writeAtomic(path, append(b, '\n'))
+}
+
+// writeAtomic writes b to path through a 0600 temporary file in its directory
+// and a rename: a reader sees the old file or the new one, never a half.
+func writeAtomic(path string, b []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
 	if err != nil {
 		return err
 	}
 	defer os.Remove(tmp.Name()) // a no-op after the rename
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
+	if _, err := tmp.Write(b); err != nil {
 		tmp.Close()
 		return err
 	}

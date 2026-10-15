@@ -48,8 +48,11 @@ func TestAConfigOfTheProtocolHandlerParses(t *testing.T) {
 	if c.Iface != "vkturn" || c.Conns != 20 || !c.UseUDP || c.Fwmark != 0x200000 || len(c.VKLinks) != 2 || c.DownAfter != time.Minute {
 		t.Fatalf("parsed %+v", c)
 	}
-	if c.MTU != mtuStandard || c.Keepalive != 25 || c.PoolReserve != 1 {
-		t.Fatalf("defaults lost: mtu %d keepalive %d reserve %d", c.MTU, c.Keepalive, c.PoolReserve)
+	if c.MTU != mtuStandard || c.Keepalive != 25 || c.PoolReserve != 1 || !c.SpreadRelays {
+		t.Fatalf("defaults lost: mtu %d keepalive %d reserve %d spread_relays %v", c.MTU, c.Keepalive, c.PoolReserve, c.SpreadRelays)
+	}
+	if c, err := parseConfig(strings.NewReader(goodConfig() + "spread_relays=0\n")); err != nil || c.SpreadRelays {
+		t.Fatalf("spread_relays=0: %v, spread %v", err, c.SpreadRelays)
 	}
 }
 
@@ -365,7 +368,8 @@ func TestNothingIsWrittenInTheWorkingDirectory(t *testing.T) {
 
 // The daemon changes nothing of the router's but its own device: it runs no
 // program but the netifd hook — no ip, route, resolvectl, uci — and writes no
-// file but the status (and, through the proxy, the credential cache). A scan
+// file but the status, the profiles of SIGUSR2 beside it (and, through the
+// proxy, the credential cache). A scan
 // of the package's source, since the real calls need root and a router.
 func TestTheDaemonRunsNoNetworkToolAndWritesNoSystemFile(t *testing.T) {
 	files, _ := filepath.Glob("*.go")
@@ -410,8 +414,8 @@ func TestTheDaemonRunsNoNetworkToolAndWritesNoSystemFile(t *testing.T) {
 			return true
 		})
 	}
-	if execs != 1 || writes != 2 {
-		t.Fatalf("the scan found %d exec and %d write sites, want 1 and 2 (the status, the link's fingerprint) — it no longer reads what it was written for", execs, writes)
+	if execs != 1 || writes != 3 {
+		t.Fatalf("the scan found %d exec and %d write sites, want 1 and 3 (the status, the link's fingerprint, the CPU profile) — it no longer reads what it was written for", execs, writes)
 	}
 }
 

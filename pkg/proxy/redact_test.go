@@ -67,6 +67,7 @@ func TestTheDiagnosticDumpsAreRedacted(t *testing.T) {
 		"creds.go":          {`log.Printf("vk: captcha required (attempt %d), url: %s", attempt+1, redactURL(captchaImg))`, `log.Printf("vk: step2 response (host=%s, attempt=%d): %s", vkAPIHost(), attempt+1, redactedJSON(resp))`, `log.Printf("vk: step4 (okcdn vchat.joinConversationByLink) response: %s", redactedJSON(resp))`, `log.Printf("vk: captcha error response: %s", redactedJSON(errObj))`},
 		"captcha_pow.go":    {`log.Printf("pow: %s response: %s", method, redactBody(body, 300))`},
 		"proxy.go":          {`log.Printf("proxy: captcha required, waiting for answer (image: %s)", redactURL(imageURL))`},
+		"creds_vkcalls.go":  {`log.Printf("vkcalls: SUCCESS — username=%s, addresses=%v", redacted, addresses)`},
 		"creds_vkcookie.go": {`log.Printf("vk-cookie: SUCCESS user=%s addrs=%v", redacted, addrs)`},
 	} {
 		src, err := os.ReadFile(file)

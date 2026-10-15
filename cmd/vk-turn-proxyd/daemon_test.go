@@ -313,6 +313,9 @@ func TestTheInfoLogDropsThePeriodicDiagnostics(t *testing.T) {
 	w := &filterWriter{out: &buf}
 	w.Write([]byte("proxy: memstats 5s rss=10MB\n"))
 	w.Write([]byte("proxy: pathstats tick os-default=203.0.113.4\n"))
+	w.Write([]byte("pion/turnc: Refresh timer 2 expired\n"))
+	w.Write([]byte("  conn 3:  TX 1.2 KB/s (2.0 MB cum)  RX 9.1 KB/s (40.1 MB cum)\n"))
+	w.Write([]byte("proxy: reorder(downlink): 120 pkts, 1.2% out-of-order\n"))
 	w.Write([]byte("proxy: first connection up in 1s\n"))
 	if got := buf.String(); got != "proxy: first connection up in 1s\n" {
 		t.Fatalf("info log = %q", got)

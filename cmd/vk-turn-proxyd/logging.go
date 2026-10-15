@@ -16,15 +16,32 @@ import (
 	"golang.zx2c4.com/wireguard/device"
 )
 
-// noisy are the substrings of the periodic diagnostic lines.
+// noisy are the substrings of the routine diagnostic lines — measured on the
+// router: these made ~90% of 900 lines in the first seven minutes. pion's
+// errors ("Fail…") and every line of the proxy's own decisions stay.
 var noisy = [][]byte{
 	[]byte("proxy: memstats"),
 	[]byte("proxy: pathstats"),
 	[]byte("proxy: HEARTBEAT"),
 	[]byte("proxy: heartbeat"),
+	[]byte("proxy: reorder("),
+	[]byte("proxy: ALLOC-SPIKE"),
+	[]byte("proxy: conn-stats tick"),
+	[]byte("SRTP first pong received"),
 	[]byte("[HEALTH]"),
 	[]byte("sockstats"),
+	[]byte("pion/turnc: Refresh timer"),
+	[]byte("pion/turnc: Refresh permissions successful"),
+	[]byte("pion/turnc: Refresh allocation successful"),
+	[]byte("pion/turnc: Updated lifetime"),
+	[]byte("pion/turnc: Started refresh"),
+	[]byte("pion/turnc: Send refresh request"),
+	[]byte("pion/turnc: Refresh request sent"),
+	[]byte("pion/turnc: Initial lifetime"),
 }
+
+// noisyPrefix: the per-connection block of the conn-stats tick.
+var noisyPrefix = []byte("  conn ")
 
 type filterWriter struct {
 	mu    sync.Mutex
@@ -34,6 +51,9 @@ type filterWriter struct {
 
 func (f *filterWriter) Write(p []byte) (int, error) {
 	if !f.debug {
+		if bytes.HasPrefix(p, noisyPrefix) {
+			return len(p), nil
+		}
 		for _, n := range noisy {
 			if bytes.Contains(p, n) {
 				return len(p), nil

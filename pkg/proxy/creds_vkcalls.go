@@ -251,7 +251,7 @@ func getVKCredsViaVKCallsPath(linkID string) (*TURNCreds, error) {
 		return nil, fmt.Errorf("vkcalls step5: turn_server.urls empty")
 	}
 
-	log.Printf("vkcalls: SUCCESS — username=%s, addresses=%v", user, addresses)
+	log.Printf("vkcalls: SUCCESS — username=%s, addresses=%v", redacted, addresses) // the TURN username is a credential
 	return &TURNCreds{
 		Username:  user,
 		Password:  pass,

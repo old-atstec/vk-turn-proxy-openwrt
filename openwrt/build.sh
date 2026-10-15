@@ -60,12 +60,20 @@ grep -q "^src-link vkturn " feeds.conf.default || echo "src-link vkturn /build-s
 timeout 15m ./scripts/feeds update -a >/dev/null
 ./scripts/feeds install vk-turn-proxy luci-proto-vkturn >/dev/null
 make defconfig >/dev/null
+# The SDK selects every kmod and every non-shared package by default (the
+# setting of the buildbots): hundreds of packages we do not ship. Ours alone.
+sed -i -e "s/^CONFIG_ALL_KMODS=y/# CONFIG_ALL_KMODS is not set/" \
+	-e "s/^CONFIG_ALL_NONSHARED=y/# CONFIG_ALL_NONSHARED is not set/" \
+	-e "s/^CONFIG_ALL=y/# CONFIG_ALL is not set/" .config
+echo "CONFIG_PACKAGE_vk-turn-proxy=m" >> .config
+echo "CONFIG_PACKAGE_luci-proto-vkturn=m" >> .config
+make defconfig >/dev/null
 
 g="git -c safe.directory=/src -C /src"
 commit=$($g rev-parse HEAD 2>/dev/null || echo local)
 [ -z "$($g status --porcelain 2>/dev/null)" ] || commit="$commit-dirty"
 make package/vk-turn-proxy/clean >/dev/null || true
-timeout "$BUILD_TIMEOUT" make -j"$(nproc)" package/vk-turn-proxy/compile USE_SOURCE_DIR=/build-src PKG_SOURCE_VERSION="$commit" V=s > /out/build.log 2>&1 \
+timeout "$BUILD_TIMEOUT" make -j"$(nproc)" package/vk-turn-proxy/compile VKTURN_SRC=/build-src VKTURN_COMMIT="$commit" V=s > /out/build.log 2>&1 \
 	|| { tail -n 60 /out/build.log; exit 1; }
 timeout 30m make -j"$(nproc)" package/luci-proto-vkturn/compile V=s >> /out/build.log 2>&1 \
 	|| { tail -n 60 /out/build.log; exit 1; }

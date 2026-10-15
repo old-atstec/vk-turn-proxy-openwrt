@@ -67,6 +67,8 @@ type config struct {
 	StatsEvery    time.Duration
 	StatusFile    string
 	Notify        string // the netifd hook: <Notify> up|down
+	TunFDSocket   string // the app mode (app.go): the tun comes from the app over this unix socket
+	AppEvents     bool   // network_events=stdin: the app tells the network changes (app.go)
 	Debug         bool
 	WGVerbose     bool
 
@@ -225,6 +227,17 @@ func (c *config) set(k, v string) error {
 		c.StatusFile = v
 	case "notify":
 		c.Notify = v
+	case "tun_fd_socket":
+		c.TunFDSocket = v
+	case "network_events":
+		switch v {
+		case "route", "":
+			c.AppEvents = false
+		case "stdin":
+			c.AppEvents = true
+		default:
+			err = errors.New("route or stdin")
+		}
 	case "log_level":
 		switch v {
 		case "info", "":

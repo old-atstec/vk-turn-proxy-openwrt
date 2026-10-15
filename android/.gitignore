@@ -1,0 +1,8 @@
+.gradle/
+build/
+local.properties
+out/
+keystore/
+# the daemon, put there by build.sh
+app/src/main/jniLibs/
+.kotlin/

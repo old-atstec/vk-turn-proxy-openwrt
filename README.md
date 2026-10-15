@@ -18,10 +18,12 @@ WireGuard через TURN-релеи звонков VK как **обычный �
 | `pkg/proxy`, `pkg/turnbind` | ядро апстрима: SRTP, TURN, пул кредов, автосолвер капчи |
 | `openwrt/vk-turn-proxy` | пакет: демон, `/lib/netifd/proto/vkturn.sh`, хук up/down, rpcd-объект `vkturn` |
 | `openwrt/luci-proto-vkturn` | пакет LuCI: форма протокола и страница Status → VK TURN |
+| `android/` | приложение для Android: VPN с раздельным туннелированием по приложениям, движок — тот же демон |
 
 | Документ | О чём |
 |---|---|
 | [openwrt/README.md](openwrt/README.md) | установка, настройка UCI/LuCI, NetShift, firewall, безопасность |
+| [android/README.md](android/README.md) | Android: устройство, раздельное туннелирование, сборка APK |
 | [docs/development.md](docs/development.md) | сборка (быстрая и SDK), версии, установка/обновление/удаление, sysupgrade, апстрим |
 | [docs/design.md](docs/design.md) | устройство и почему так: netifd-хук, статус, fwmark, живость туннеля, кэш кредов |
 | [docs/router-testing.md](docs/router-testing.md) | сценарии проверки на роутере и замеры |

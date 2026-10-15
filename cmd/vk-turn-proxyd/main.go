@@ -32,6 +32,8 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 )
@@ -96,13 +98,17 @@ func realMain(args []string, stdin *os.File, stdout *os.File) int {
 		fmt.Fprintln(stdout, "config OK")
 		return 0
 	}
-	if os.Geteuid() != 0 {
+	if os.Geteuid() != 0 && c.TunFDSocket == "" {
 		log.Print("run it as root: it creates a tun device")
 		return 1
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return newDaemon(c).run(ctx)
+	d := newDaemon(c)
+	if c.AppEvents {
+		d.stdin = stdin
+	}
+	return d.run(ctx)
 }
 
 func versionString() string {
@@ -130,18 +136,27 @@ func scrubEnv() {
 	}
 }
 
+var (
+	resolverServer atomic.Pointer[string]
+	resolverOnce   sync.Once
+)
+
 // installResolver points the process's own lookups (VK's API and captcha
 // hosts) at server, through sockets with the proxy's socket options; with
-// none the system's resolver (dnsmasq on the router) is used.
+// none the system's resolver (dnsmasq on the router) is used. Called again,
+// it moves the lookups to the new server (the app's "dns", app.go).
 func installResolver(server string) {
 	if server == "" {
 		return
 	}
-	net.DefaultResolver = &net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			d := net.Dialer{Timeout: 5 * time.Second, Control: socketControl}
-			return d.DialContext(ctx, network, server)
-		},
-	}
+	resolverServer.Store(&server)
+	resolverOnce.Do(func() {
+		net.DefaultResolver = &net.Resolver{
+			PreferGo: true,
+			Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+				d := net.Dialer{Timeout: 5 * time.Second, Control: socketControl}
+				return d.DialContext(ctx, network, *resolverServer.Load())
+			},
+		}
+	})
 }

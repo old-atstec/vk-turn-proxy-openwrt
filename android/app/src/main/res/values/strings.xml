@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VK TURN</string>
+    <string name="apps_title">Приложения</string>
+    <string name="connect">Подключить</string>
+    <string name="disconnect">Отключить</string>
+    <string name="sec_server">Сервер</string>
+    <string name="peer">Адрес сервера (host:port, листенер -srtp)</string>
+    <string name="server_key">Публичный ключ сервера</string>
+    <string name="psk">Preshared key (необязательно)</string>
+    <string name="private_key">Приватный ключ клиента</string>
+    <string name="genkey">Новый ключ</string>
+    <string name="copy_pub">Копировать публичный</string>
+    <string name="sec_tunnel">Туннель</string>
+    <string name="address">Адрес в туннеле (CIDR)</string>
+    <string name="tunnel_dns">DNS в туннеле (через запятую)</string>
+    <string name="mtu">MTU</string>
+    <string name="routes">Маршруты в туннель (CIDR через запятую)</string>
+    <string name="bypass_lan">Локальные сети — мимо туннеля</string>
+    <string name="sec_split">Раздельное туннелирование</string>
+    <string name="split_all">Все приложения</string>
+    <string name="split_only">Только выбранные</string>
+    <string name="split_except">Все, кроме выбранных</string>
+    <string name="choose_apps">Выбрать приложения…</string>
+    <string name="sec_vk">VK</string>
+    <string name="links">Ссылки на звонки VK (по одной в строке)</string>
+    <string name="conns">Соединений</string>
+    <string name="tcp">TURN по TCP (по умолчанию UDP)</string>
+    <string name="fallback_dns">DNS для запросов к VK, если сеть его не сообщила</string>
+    <string name="sec_status">Состояние</string>
+    <string name="copy_log">Копировать журнал</string>
+    <string name="open_captcha">Открыть капчу</string>
+    <string name="show_system">Системные</string>
+    <string name="search">Поиск</string>
+</resources>

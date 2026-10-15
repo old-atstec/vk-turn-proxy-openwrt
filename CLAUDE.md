@@ -13,6 +13,7 @@
 | `openwrt/vk-turn-proxy/` | пакет: Makefile, `files/` — netifd-обработчик, хук up/down, rpcd-плагин |
 | `openwrt/luci-proto-vkturn/` | пакет LuCI |
 | `openwrt/package-native.sh`, `openwrt/build.sh` | две сборки одних и тех же пакетов |
+| `android/` | Android-приложение (Kotlin, без AndroidX); демон внутри — `cmd/vk-turn-proxyd` в режиме приложения (`app.go`) |
 | `docs/` | [разработка и релизы](docs/development.md), [устройство и решения](docs/design.md), [проверки на роутере](docs/router-testing.md) |
 | `openwrt/TODO.md` | отложенные доработки |
 
@@ -24,6 +25,7 @@ tools/test.sh                                                       # полны
 openwrt/package-native.sh                                           # apk для aarch64_generic за секунды
 ARCH=mipsel_24kc openwrt/package-native.sh                          # другая архитектура
 openwrt/build.sh                                                    # эталон: OpenWrt SDK (на Apple silicon — часы, эмуляция)
+android/build.sh                                                    # APK (демон — Go хоста, Gradle — в контейнере)
 ```
 
 Linux-специфичное (SO_MARK, `/proc/net/route`) проверяется в контейнере:
@@ -38,6 +40,8 @@ Linux-специфичное (SO_MARK, `/proc/net/route`) проверяется
 - Коммиты — от `old-atstec <old-atstec@users.noreply.github.com>` (`git config --local`), с
   `Co-Authored-By` ассистента. Push делает владелец.
 - Изменили что-то в пакете — поднимите `PKG_RELEASE` в его Makefile (иначе `apk add` не обновит).
+  Выпуск Android — `vkturnVersionCode` в `android/gradle.properties`.
+- `android/keystore/` — ключ подписи APK; в git не класть, терять нельзя (иначе обновление не встанет).
 - Сборка воспроизводимая: `GOFLAGS=-mod=readonly`, `CGO_ENABLED=0`, `-trimpath`; `GOSUMDB`/`GONOSUMDB`
   не трогать; ничего не ставить из чужих бинарных релизов.
 - `gofmt -l pkg/` показывает файлы апстрима (`creds.go`, `captcha_pow.go`, …) — расхождения его, не наши;

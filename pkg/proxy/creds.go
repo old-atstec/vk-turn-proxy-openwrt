@@ -581,9 +581,8 @@ func getVKCredsWithClientID(linkID string, vc vkCredentials, captchaSolver Captc
 		// DIAGNOSTIC (2026-05-17 api.vk.me test): always dump step2 response
 		// so we can see what api.vk.me returns differently from api.vk.ru.
 		// Remove after the hypothesis is resolved.
-		if respJSON, mErr := json.Marshal(resp); mErr == nil {
-			log.Printf("vk: step2 response (host=%s, attempt=%d): %s", vkAPIHost(), attempt+1, string(respJSON))
-		}
+		// Redacted (redact.go): the answer carries the tokens.
+		log.Printf("vk: step2 response (host=%s, attempt=%d): %s", vkAPIHost(), attempt+1, redactedJSON(resp))
 
 		// Check for captcha (VK error code 14)
 		captchaSID, captchaImg, captchaTs, captchaAttempt := extractCaptcha(resp)
@@ -591,7 +590,7 @@ func getVKCredsWithClientID(linkID string, vc vkCredentials, captchaSolver Captc
 		// error_code-14 format (2026-06-24) ships redirect_uri+session_token
 		// with NO captcha_sid, so a sid-gate would skip the solver entirely.
 		if captchaImg != "" {
-			log.Printf("vk: captcha required (attempt %d), url: %s", attempt+1, captchaImg)
+			log.Printf("vk: captcha required (attempt %d), url: %s", attempt+1, redactURL(captchaImg))
 
 			// Try automatic PoW solver up to 3 times with fresh captcha sessions.
 			const maxPoWRetries = 3
@@ -774,9 +773,8 @@ func getVKCredsWithClientID(linkID string, vc vkCredentials, captchaSolver Captc
 	// tool (and on-device logs) show EXACTLY what calls.okcdn.ru returns for our
 	// anonymToken — the wall is HERE (anonym_token.not_found), not the mint.
 	// Mirrors the step2-response diagnostic above.
-	if respJSON, mErr := json.Marshal(resp); mErr == nil {
-		log.Printf("vk: step4 (okcdn vchat.joinConversationByLink) response: %s", string(respJSON))
-	}
+	// Redacted (redact.go): the answer carries the TURN username and credential.
+	log.Printf("vk: step4 (okcdn vchat.joinConversationByLink) response: %s", redactedJSON(resp))
 
 	user, err := extractStr(resp, "turn_server", "username")
 	if err != nil {
@@ -3568,9 +3566,7 @@ func extractCaptcha(resp map[string]interface{}) (sid, captchaURL string, captch
 	}
 
 	// Log the full error for debugging
-	if errJSON, err := json.Marshal(errObj); err == nil {
-		log.Printf("vk: captcha error response: %s", string(errJSON))
-	}
+	log.Printf("vk: captcha error response: %s", redactedJSON(errObj)) // redacted: the captcha's session token
 
 	// Prefer redirect_uri (new "I'm not a robot" captcha that works in browser)
 	if uri, ok := errObj["redirect_uri"].(string); ok && uri != "" {

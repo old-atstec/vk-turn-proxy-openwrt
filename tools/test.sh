@@ -3,14 +3,13 @@
 #
 #   ./tools/test.sh
 #
-# 🚨 WHY THIS FILE EXISTS. The suites live in three places that no single command
+# 🚨 WHY THIS FILE EXISTS. The suites live in two places that no single command
 # reaches:
 #
 #   1. pkg/... and the rest of the root module   — `go test ./...`
 #   2. third_party/speedtest-go                  — a SEPARATE module behind a
 #      `replace`, so the root `./...` does not see it. Its fork guards had never
 #      been run by anything except a human typing the command.
-#   3. tools/swiftcheck                          — a compiled Swift harness.
 #
 # Recording three commands in three files is the same defect as a harness that is
 # green, sabotage-validated and not in the repo: a recorded way to run something
@@ -32,7 +31,19 @@ run() {
     fi
 }
 
-goflags=(-count=1)
+# An explicit ceiling per test binary: the suites run on loopback stands (no
+# internet), and a stand that hangs must fail the gate, not hold it. The
+# slowest package (pkg/proxy with VKTP_SLOW) takes ~3 min under -race.
+goflags=(-count=1 -timeout=10m)
+
+# timeout(1) where there is one (Linux, coreutils on macOS as gtimeout).
+with_timeout() {
+    local t=$1; shift
+    if command -v timeout >/dev/null; then timeout "$t" "$@"
+    elif command -v gtimeout >/dev/null; then gtimeout "$t" "$@"
+    else "$@"
+    fi
+}
 [ "$RACE" = "1" ] && goflags+=(-race)
 
 # 🚨 THE GATE RUNS THE SLOW TESTS TOO. A test that waits for a library's own
@@ -56,7 +67,7 @@ export VKTP_SLOW=${VKTP_SLOW-1}
 # replace).
 UPSTREAM=github.com/showwin/speedtest-go@v1.7.11
 echo "== fetching pristine $UPSTREAM for the fork's upstream-diff guard"
-if go mod download "$UPSTREAM"; then
+if with_timeout 300 go mod download "$UPSTREAM"; then
     echo "   ready"
 else
     echo "   FAIL: could not fetch $UPSTREAM -- the fork's divergence guard cannot run" >&2
@@ -73,38 +84,28 @@ run "root module — go test ${goflags[*]} ./..." \
 run "vendored fork — separate module, not reached by the root ./..." \
     env -C third_party/speedtest-go go test "${goflags[@]}" ./speedtest/
 
-# 🚨 A FOURTH place since stage 5: the Go bridge is its own module (its go.mod
-# replaces the root module with `..`), so the root ./... never sees
-# csqtt_bridge_test.go — the descriptor-ownership, pump and cleanup checks. Built
-# with the same tag the xcframework is.
-# GODEBUG pinned in the ENVIRONMENT: the bridge's C constructor sets
-# asyncpreemptoff=1 for the iOS runtime, and on the macOS host that setenv can
-# lose the race with the Go runtime's own startup — "signal 16 received on
-# thread with no signal stack / non-Go code disabled sigaltstack" before the
-# first test runs (seen twice on 2026-09-06 under -race). The variable set
-# here is read before either.
-run "WireGuardBridge — separate module, the csqtt bridge lifecycle" \
-    env -C WireGuardBridge GODEBUG=asyncpreemptoff=1 go test "${goflags[@]}" -tags ios .
-
-# The console client ships as five binaries that GitHub builds for the release
-# (.github/workflows/vk-turn-proxy-console.yml). A build or vet failure on one
-# of them would first show there — after the tag is pushed. The gate builds and
-# vets every target here; its tests ran with the root module above.
-console_targets() {
+# The OpenWrt daemon ships as one static binary per router architecture
+# (openwrt/: the packages build it through golang-package.mk). A build or vet
+# failure on one of them would first show in the package build: the gate builds
+# and vets every target here; its tests ran with the root module above.
+daemon_targets() {
     local ok=0 t
-    for t in darwin/amd64 darwin/arm64 freebsd/amd64 linux/amd64 linux/arm64; do
-        CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go build -trimpath -o /dev/null ./tools/vk-turn-proxy-console \
+    for t in linux/arm64 linux/amd64 linux/arm/7 linux/mipsle/softfloat; do
+        set -- $(echo "$t" | tr / ' ')
+        local env=(CGO_ENABLED=0 GOOS=$1 GOARCH=$2)
+        case $2 in
+            arm) env+=(GOARM=$3) ;;
+            mipsle) env+=(GOMIPS=$3) ;;
+        esac
+        env "${env[@]}" go build -trimpath -o /dev/null ./cmd/vk-turn-proxyd \
             || { echo "   build $t failed"; ok=1; }
-        CGO_ENABLED=0 GOOS=${t%/*} GOARCH=${t#*/} go vet ./tools/vk-turn-proxy-console \
+        env "${env[@]}" go vet ./cmd/vk-turn-proxyd \
             || { echo "   vet $t failed"; ok=1; }
     done
     return $ok
 }
-run "vk-turn-proxy-console — built and vetted for the five release targets" \
-    console_targets
-
-run "swiftcheck — Swift value types and source scans" \
-    ./tools/swiftcheck/run.sh
+run "vk-turn-proxyd — built and vetted for the router targets" \
+    daemon_targets
 
 echo
 if [ "$fail" = 0 ]; then

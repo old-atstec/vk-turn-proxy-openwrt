@@ -411,7 +411,7 @@ func getVKCredsViaCookies(ctx context.Context, linkID, cookieHeader string) (*TU
 		return nil, fmt.Errorf("join: turn_server.urls empty")
 	}
 
-	log.Printf("vk-cookie: SUCCESS user=%s addrs=%v", user, addrs)
+	log.Printf("vk-cookie: SUCCESS user=%s addrs=%v", redacted, addrs) // the TURN username is a credential
 	return &TURNCreds{Username: user, Password: pass, Address: addrs[0], Addresses: addrs}, nil
 }
 

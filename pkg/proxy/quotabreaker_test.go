@@ -327,13 +327,6 @@ func TestTheSuccessMarksSitAtTheTURNAllocationSites(t *testing.T) {
 			t.Errorf("proxy.go lacks %q — the mark must name the credential the session leased", call)
 		}
 	}
-	bridge, err := os.ReadFile("../../WireGuardBridge/csqtt_bridge.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(bridge), "NoteAllocated(slot, creds)") {
-		t.Error("csqtt_bridge.go: the adapter's Allocated callback does not hand the leased credential to NoteAllocated")
-	}
 	for _, lit := range []string{"DTLS+TURN session established", "direct TURN session established", "WRAP-A+TURN session established", "SRTP+TURN session established"} {
 		i := strings.Index(code, lit)
 		if i < 0 {

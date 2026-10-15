@@ -1,0 +1,13 @@
+{
+	"admin/status/vkturn": {
+		"title": "VK TURN",
+		"order": 93,
+		"action": {
+			"type": "view",
+			"path": "vkturn/status"
+		},
+		"depends": {
+			"acl": [ "luci-proto-vkturn" ]
+		}
+	}
+}

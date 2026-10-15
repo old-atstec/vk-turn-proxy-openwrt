@@ -1680,7 +1680,7 @@ func callCaptchaNotRobotAPI(ctx context.Context, client tls_client.HttpClient, s
 				httpResp.Header.Get("Content-Encoding"), err)
 		}
 
-		log.Printf("pow: %s response: %s", method, string(body[:min(300, len(body))]))
+		log.Printf("pow: %s response: %s", method, redactBody(body, 300))
 
 		var resp map[string]interface{}
 		if err := json.Unmarshal(body, &resp); err != nil {

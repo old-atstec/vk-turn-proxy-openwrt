@@ -43,3 +43,6 @@ release.sh
 install.sh
 idev.sh
 iphone.tcpdump.sh
+
+# OpenWrt package builds
+openwrt/out/

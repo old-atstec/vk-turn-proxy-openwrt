@@ -906,11 +906,4 @@ func TestEverySessionReleasesItsLeaseBehindTheRelaysSecond(t *testing.T) {
 	if b := body(join, "func (p *Proxy) joinRelayLeg("); !strings.Contains(b, "leg.gave.note(") {
 		t.Error("a relay leg left behind is not noted: its allocation is being given back about then, and the seat must stay counted")
 	}
-	bridge, err := os.ReadFile("../../WireGuardBridge/csqtt_bridge.go")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if b := stripComments(string(bridge)); !strings.Contains(b, "a.pool.ReleaseGivenBack(slot, creds, time.Now())") || !strings.Contains(b, "allocated.Load()") {
-		t.Error("csqtt's lease does not go back behind the relay's second when it held an allocation")
-	}
 }

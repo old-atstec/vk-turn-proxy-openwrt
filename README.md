@@ -19,8 +19,14 @@ WireGuard через TURN-релеи звонков VK как **обычный �
 | `openwrt/vk-turn-proxy` | пакет: демон, `/lib/netifd/proto/vkturn.sh`, хук up/down, rpcd-объект `vkturn` |
 | `openwrt/luci-proto-vkturn` | пакет LuCI: форма протокола и страница Status → VK TURN |
 
-Установка, настройка, сборка и устройство — в [openwrt/README.md](openwrt/README.md).
-Отложенные доработки — в [openwrt/TODO.md](openwrt/TODO.md).
+| Документ | О чём |
+|---|---|
+| [openwrt/README.md](openwrt/README.md) | установка, настройка UCI/LuCI, NetShift, firewall, безопасность |
+| [docs/development.md](docs/development.md) | сборка (быстрая и SDK), версии, установка/обновление/удаление, sysupgrade, апстрим |
+| [docs/design.md](docs/design.md) | устройство и почему так: netifd-хук, статус, fwmark, живость туннеля, кэш кредов |
+| [docs/router-testing.md](docs/router-testing.md) | сценарии проверки на роутере и замеры |
+| [openwrt/TODO.md](openwrt/TODO.md) | отложенные доработки |
+| [CLAUDE.md](CLAUDE.md) | памятка для работы с репозиторием (люди и ИИ-ассистенты) |
 
 ## Изменения ядра относительно апстрима
 

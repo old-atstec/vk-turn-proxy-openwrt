@@ -29,6 +29,9 @@
     <string name="fallback_dns">DNS для запросов к VK, если сеть его не сообщила</string>
     <string name="sec_status">Состояние</string>
     <string name="copy_log">Копировать журнал</string>
+    <string name="open_log">Журнал</string>
+    <string name="log_title">Журнал</string>
+    <string name="log_paused">Обновление на паузе — прокрутите вниз</string>
     <string name="open_captcha">Открыть капчу</string>
     <string name="show_system">Системные</string>
     <string name="search">Поиск</string>

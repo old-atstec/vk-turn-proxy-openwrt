@@ -42,6 +42,13 @@
             android:layout_marginTop="8dp"
             android:text="@string/connect" />
 
+        <Button
+            android:id="@+id/open_log"
+            style="?android:attr/borderlessButtonStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/open_log" />
+
         <!-- Server -->
         <TextView style="@style/Section" android:text="@string/sec_server" />
 
@@ -202,21 +209,5 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content" />
 
-        <!-- Log -->
-        <TextView style="@style/Section" android:text="@string/sec_status" />
-
-        <Button
-            android:id="@+id/copy_log"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/copy_log" />
-
-        <TextView
-            android:id="@+id/log"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:fontFamily="monospace"
-            android:textIsSelectable="true"
-            android:textSize="11sp" />
     </LinearLayout>
 </ScrollView>

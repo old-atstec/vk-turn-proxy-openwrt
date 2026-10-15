@@ -48,7 +48,7 @@ class MainActivity : Activity() {
             save()
             startActivity(Intent(this, AppsActivity::class.java))
         }
-        f<Button>(R.id.copy_log).setOnClickListener { copy("Журнал VK TURN", Tunnel.logText()) }
+        f<Button>(R.id.open_log).setOnClickListener { startActivity(Intent(this, LogActivity::class.java)) }
         f<Button>(R.id.captcha).setOnClickListener {
             val url = Tunnel.status?.optString("captcha_url").orEmpty()
             if (url.startsWith("https://")) startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -213,22 +213,26 @@ class MainActivity : Activity() {
 
     // --- state ---
 
+    /** Every status poll and log line lands here: a text set to itself would still lay the page out anew. */
+    private fun TextView.show(s: CharSequence) {
+        if (text.toString() != s.toString()) text = s
+    }
+
     private fun render() {
         val st = Tunnel.status
-        f<TextView>(R.id.state).text = when (Tunnel.phase) {
+        f<TextView>(R.id.state).show(when (Tunnel.phase) {
             Tunnel.Phase.OFF -> if (Tunnel.error != null) "Отключено — ошибка" else "Отключено"
             Tunnel.Phase.STARTING -> stateWord(st) ?: "Запуск…"
             Tunnel.Phase.RUNNING -> stateWord(st) ?: "Работает"
             Tunnel.Phase.STOPPING -> "Отключение…"
-        }
+        })
         f<Button>(R.id.toggle).apply {
-            text = getString(if (Tunnel.phase == Tunnel.Phase.OFF) R.string.connect else R.string.disconnect)
+            show(getString(if (Tunnel.phase == Tunnel.Phase.OFF) R.string.connect else R.string.disconnect))
             isEnabled = Tunnel.phase != Tunnel.Phase.STOPPING
         }
-        f<TextView>(R.id.details).text = details(st)
-        f<Button>(R.id.captcha).visibility =
-            if (st?.optBoolean("captcha_needed") == true && st.optString("captcha_url").startsWith("https://")) View.VISIBLE else View.GONE
-        f<TextView>(R.id.log).text = Tunnel.logText().lines().takeLast(150).joinToString("\n")
+        f<TextView>(R.id.details).show(details(st))
+        val captcha = if (st?.optBoolean("captcha_needed") == true && st.optString("captcha_url").startsWith("https://")) View.VISIBLE else View.GONE
+        if (f<Button>(R.id.captcha).visibility != captcha) f<Button>(R.id.captcha).visibility = captcha
     }
 
     private fun stateWord(st: JSONObject?): String? = when (st?.optString("state")) {

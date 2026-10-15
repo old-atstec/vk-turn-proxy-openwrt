@@ -270,9 +270,10 @@ func TestEveryLeaseHolderNamesItsCredential(t *testing.T) {
 		}
 		return stripComments(string(src))
 	}
-	proxySrc, bridge, creds := code("proxy.go"), code("../../WireGuardBridge/csqtt_bridge.go"), code("creds.go")
+	// (The iOS bridge, csqtt_bridge.go, is not part of the OpenWrt fork.)
+	proxySrc, creds := code("proxy.go"), code("creds.go")
 
-	for name, src := range map[string]string{"proxy.go": proxySrc, "csqtt_bridge.go": bridge, "credpool.go": code("credpool.go")} {
+	for name, src := range map[string]string{"proxy.go": proxySrc, "credpool.go": code("credpool.go")} {
 		if m := oneArgPoolCall.FindString(src); m != "" {
 			t.Errorf("%s: %q tells the pool a slot number alone — a lease names its credential", name, m)
 		}
@@ -305,11 +306,6 @@ func TestEveryLeaseHolderNamesItsCredential(t *testing.T) {
 	}
 	if n := strings.Count(proxySrc, "invalidateEntry(credSlot, creds)"); n != 3 {
 		t.Errorf("proxy.go: %d invalidateEntry(credSlot, creds) calls, want 3", n)
-	}
-	for _, call := range []string{"a.pool.Release(slot, creds)", "a.pool.MarkSaturated(slot, creds)", "a.pool.InvalidateSlot(slot, creds)", "a.refused(workerID, slot, creds, err)"} {
-		if !strings.Contains(bridge, call) {
-			t.Errorf("csqtt_bridge.go lacks %q — the adapter must hand the leased credential on", call)
-		}
 	}
 
 	// The record of leases still out (credPool.holders). A seat is taken ONE

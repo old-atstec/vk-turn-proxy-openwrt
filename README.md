@@ -1,39 +1,44 @@
-# VK TURN Proxy — iOS
+# VK TURN Proxy — OpenWrt
 
-Приложение для iOS, разработанное в исследовательских и образовательных целях, которое реализует туннель (VPN) между клиентским устройством и сервером. 
+WireGuard через TURN-релеи звонков VK как **обычный сетевой интерфейс OpenWrt**:
+`proto vkturn` в `/etc/config/network`, жизненный цикл через netifd, форма и статус в LuCI,
+выход для NetShift / sing-box (`connection_type=vpn`, `interface=vkturn`).
 
-Для построения туннеля могут быть использованы несколько разновидностей протоколов, общей частью которых является работа через [TURN relay](https://www.rfc-editor.org/info/rfc8656/). По умолчанию используются relay [ВКонтакте](https://vk.com) или можно задать другой TURN relay в настройках. Использование TURN relay как промежуточного звена позволяет приложению работать в том числе в условиях фильтрации трафика в корпоративной сети или у сотового провайдера.
+Форк [anton48/vk-turn-proxy-ios](https://github.com/anton48/vk-turn-proxy-ios) @ `a13e19e`.
+Транспорт — родной режим приложения **SRTP** (DTLS-SRTP поверх TURN, креды через путь VK Звонков
+без капчи) к серверу [anton48/vk-turn-proxy](https://github.com/anton48/vk-turn-proxy)
+(ветка `add-server-srtp-layer`, флаг `-srtp`). iOS-приложение и десктопный консольный клиент из
+форка удалены, ядро `pkg/proxy` сохранено с минимальными изменениями.
 
-## Установка
+## Состав
 
-Загрузите приложение TestFlight из AppStore на устройство, затем откройте на нем [ссылку](https://testflight.apple.com/join/ANm6cmDv). 
+| Путь | Что |
+|---|---|
+| `cmd/vk-turn-proxyd` | демон для роутера (router mode): tun + wireguard-go + прокси, статус, хук netifd |
+| `pkg/proxy`, `pkg/turnbind` | ядро апстрима: SRTP, TURN, пул кредов, автосолвер капчи |
+| `openwrt/vk-turn-proxy` | пакет: демон, `/lib/netifd/proto/vkturn.sh`, хук up/down, rpcd-объект `vkturn` |
+| `openwrt/luci-proto-vkturn` | пакет LuCI: форма протокола и страница Status → VK TURN |
 
-Так же, возможна самостоятельная загрузка IPA файла из раздела [Releases](https://github.com/anton48/vk-turn-proxy-ios/releases) на устройство. Но сначала потребуется подписать IPA сертификатом **платного** эккаунта разработчика ([это требование Apple для работы с VPN](https://developer.apple.com/help/account/reference/supported-capabilities-ios)). При загрузке такого IPA файла на устройство само подключение будет рабочим, но не будет работать статистика, сохранение TURN credentials и профайла, а логи будут очень ограниченными. При подписке сертификатом от бесплатного эккаунта приложение работать не будет.
+Установка, настройка, сборка и устройство — в [openwrt/README.md](openwrt/README.md).
+Отложенные доработки — в [openwrt/TODO.md](openwrt/TODO.md).
 
-## Документация
+## Изменения ядра относительно апстрима
 
-[Как это работает](https://github.com/anton48/vk-turn-proxy-ios/blob/main/docs/setup.md#как-это-работает)
-
-[Что необходимо для работы](https://github.com/anton48/vk-turn-proxy-ios/blob/main/docs/setup.md#что-необходимо-для-работы)
-
-[Режимы работы](https://github.com/anton48/vk-turn-proxy-ios/blob/main/docs/setup.md#режимы-работы)
-
-[Настройки приложения](https://github.com/anton48/vk-turn-proxy-ios/blob/main/docs/setup.md#настройки-клиентского-приложения)
-
-[Автоматические ссылки](https://github.com/anton48/vk-turn-proxy-ios/blob/main/docs/setup.md#автоматические-ссылки)
-
-[Backup/Restore](https://github.com/anton48/vk-turn-proxy-ios/blob/main/docs/setup.md#backuprestore)
-
-[Капча](https://github.com/anton48/vk-turn-proxy-ios/blob/main/docs/setup.md#капча)
-
-[Ответы на частые вопросы, решение проблем](https://github.com/anton48/vk-turn-proxy-ios/blob/main/docs/setup.md#ответы-на-частые-вопросы-решение-проблем)
+- `pkg/proxy/sockopt*.go` — `SO_MARK` / `SO_BINDTODEVICE` на всех сокетах прокси (через тот же
+  Control-хук, что и dial hook); `net.DialUDP` / `net.ListenUDP` заменены на Dialer / ListenConfig.
+- `pkg/proxy/redact.go` — ответы VK (step2, step4, ошибка капчи, методы капчи) и URL капчи
+  попадают в лог с замаскированными токенами, TURN-логином и паролем.
+- Тесты, читавшие исходники удалённого iOS-моста, сокращены до проверок самого ядра.
 
 ## Credits
 
-Based on [vk-turn-proxy](https://github.com/cacggghp/vk-turn-proxy) by [cacggghp](https://github.com/cacggghp).
+Based on [vk-turn-proxy-ios](https://github.com/anton48/vk-turn-proxy-ios) by anton48 and
+[vk-turn-proxy](https://github.com/cacggghp/vk-turn-proxy) by [cacggghp](https://github.com/cacggghp).
 
 ## License
 
-[GNU General Public License v3.0](LICENSE) (GPL-3.0) — as a derivative of [vk-turn-proxy](https://github.com/cacggghp/vk-turn-proxy) (GPL-3.0).
+[GNU General Public License v3.0](LICENSE) (GPL-3.0) — as a derivative of
+[vk-turn-proxy](https://github.com/cacggghp/vk-turn-proxy) (GPL-3.0).
 
-Files that carry an `SPDX-License-Identifier` header are additionally available under the license named there (e.g. MIT); the project as a whole is GPL-3.0.
+Files that carry an `SPDX-License-Identifier` header are additionally available under the license
+named there (e.g. MIT); the project as a whole is GPL-3.0.

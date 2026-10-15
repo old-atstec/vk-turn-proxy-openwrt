@@ -55,8 +55,12 @@ func beforeDial(network, address string) error {
 // dialControl is beforeDial in net.Dialer.Control's shape: the dialer hands it
 // the address it resolved, after the socket exists and before connect — so a
 // name that resolves to several addresses is asked about the one being tried.
-func dialControl(network, address string, _ syscall.RawConn) error {
-	return beforeDial(network, address)
+// The socket options (sockopt.go) go on the socket right after.
+func dialControl(network, address string, c syscall.RawConn) error {
+	if err := beforeDial(network, address); err != nil {
+		return err
+	}
+	return applySockOpts(c)
 }
 
 // beforeDialUDP asks the hook about a UDP destination written to without a

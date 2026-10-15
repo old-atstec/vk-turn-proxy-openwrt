@@ -1,0 +1,15 @@
+{
+	"luci-proto-vkturn": {
+		"description": "Grant access to the VK TURN interfaces' status and key generation",
+		"read": {
+			"ubus": {
+				"vkturn": [ "status" ]
+			}
+		},
+		"write": {
+			"ubus": {
+				"vkturn": [ "reconnect", "generateKeyPair", "getPublicKey" ]
+			}
+		}
+	}
+}

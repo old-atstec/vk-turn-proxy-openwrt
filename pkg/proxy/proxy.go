@@ -1819,7 +1819,7 @@ func (p *Proxy) GetStats() Stats {
 // waitForCaptchaAnswer is the built-in CaptchaSolver that publishes the captcha
 // image URL via stats and blocks until SolveCaptcha() is called.
 func (p *Proxy) waitForCaptchaAnswer(imageURL string) (string, error) {
-	log.Printf("proxy: captcha required, waiting for answer (image: %s)", imageURL)
+	log.Printf("proxy: captcha required, waiting for answer (image: %s)", redactURL(imageURL))
 	p.captchaImageURL.Store(imageURL)
 
 	// Drain any stale answer
@@ -3430,10 +3430,17 @@ func (p *Proxy) runTURN(ctx context.Context, turnAddr string, creds *TURNCreds, 
 		if err := beforeDial(udpNetworkOf(turnUDPAddr), turnUDPAddr.String()); err != nil {
 			return fmt.Errorf("dial TURN UDP: %w", err)
 		}
-		udpConn, err := net.DialUDP("udp", nil, turnUDPAddr)
+		// A dialer rather than net.DialUDP: the socket options (sockopt.go)
+		// go on the socket before connect. The hook was asked above. No
+		// context, as net.DialUDP had none: a UDP "dial" sends nothing, and a
+		// leg whose context is already gone must still allocate and give the
+		// allocation back the way it always did (relayjoin_test.go).
+		ud := net.Dialer{Control: sockoptControl}
+		c, err := ud.DialContext(context.Background(), "udp", turnUDPAddr.String())
 		if err != nil {
 			return fmt.Errorf("dial TURN UDP: %w", err)
 		}
+		udpConn := c.(*net.UDPConn)
 		defer udpConn.Close()
 		turnConn = &connectedUDPConn{udpConn}
 	} else {
@@ -5573,7 +5580,11 @@ func (p *Proxy) setupSRTPSession(ctx context.Context, turnAddr string, creds *TU
 		if err := beforeDialUDP(turnAddr); err != nil {
 			return nil, fmt.Errorf("udp to relay: %w", err)
 		}
-		uc, err := net.ListenUDP("udp", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+		// A ListenConfig rather than net.ListenUDP: the socket options
+		// (sockopt.go) go on the socket before its first datagram. No
+		// context, as net.ListenUDP had none.
+		lc := net.ListenConfig{Control: sockoptControl}
+		uc, err := lc.ListenPacket(context.Background(), "udp", net.JoinHostPort(net.IPv4zero.String(), "0"))
 		if err != nil {
 			return nil, fmt.Errorf("local udp listen: %w", err)
 		}

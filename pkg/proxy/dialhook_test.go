@@ -284,8 +284,11 @@ func TestNoHookIsANoOp(t *testing.T) {
 // No socket in the package bypasses the hook. Read on the AST of every
 // non-test file of pkg/proxy (not the srtpwrap server's listener, a
 // sub-package):
-//   - every net.Dialer composite literal sets Control;
-//   - no zero net.Dialer is declared (`var d net.Dialer` dials around it);
+//   - every net.Dialer and net.ListenConfig composite literal sets Control
+//     (dialControl, or sockoptControl where the hook was asked by hand —
+//     sockopt_test.go checks that the options reach every socket);
+//   - no zero net.Dialer / net.ListenConfig is declared (`var d net.Dialer`
+//     dials around it);
 //   - every net.Dial / DialUDP / DialTCP / DialTimeout / ListenUDP /
 //     ListenPacket call is preceded, in its function, by beforeDial or
 //     beforeDialUDP — except pathSnapshotOSDefault, whose UDP "connect" sends
@@ -338,7 +341,7 @@ func TestNoSocketInThePackageBypassesTheDialHook(t *testing.T) {
 			ast.Inspect(fn.Body, func(n ast.Node) bool {
 				switch x := n.(type) {
 				case *ast.CompositeLit:
-					if isNet(x.Type, "Dialer") {
+					if isNet(x.Type, "Dialer") || isNet(x.Type, "ListenConfig") {
 						sites++
 						hasControl := false
 						for _, el := range x.Elts {
@@ -349,11 +352,11 @@ func TestNoSocketInThePackageBypassesTheDialHook(t *testing.T) {
 							}
 						}
 						if !hasControl {
-							problems = append(problems, fset.Position(x.Pos()).String()+": a net.Dialer without Control")
+							problems = append(problems, fset.Position(x.Pos()).String()+": a net.Dialer or net.ListenConfig without Control")
 						}
 					}
 				case *ast.ValueSpec:
-					if x.Type != nil && isNet(x.Type, "Dialer") && len(x.Values) == 0 {
+					if x.Type != nil && (isNet(x.Type, "Dialer") || isNet(x.Type, "ListenConfig")) && len(x.Values) == 0 {
 						problems = append(problems, fset.Position(x.Pos()).String()+": a zero net.Dialer — it dials around the hook")
 					}
 				case *ast.CallExpr:

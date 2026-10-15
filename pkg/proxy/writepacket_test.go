@@ -167,15 +167,6 @@ func TestNoChunkingMachineryRemains(t *testing.T) {
 			}
 		}
 	}
-
-	bridge, err := os.ReadFile("../../WireGuardBridge/bridge.go")
-	if err != nil {
-		t.Fatalf("read bridge.go: %v", err)
-	}
-	if strings.Contains(stripComments(string(bridge)), "uplink_chunk_k") {
-		t.Error("the bridge still accepts uplink_chunk_k, so a backup could re-arm " +
-			"chunking through a config the app no longer writes")
-	}
 }
 
 // stripComments removes `//` comment text so a scan tests the CODE and not the

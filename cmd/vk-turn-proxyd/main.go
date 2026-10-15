@@ -98,8 +98,8 @@ func realMain(args []string, stdin *os.File, stdout *os.File) int {
 		fmt.Fprintln(stdout, "config OK")
 		return 0
 	}
-	if os.Geteuid() != 0 && c.TunFDSocket == "" {
-		log.Print("run it as root: it creates a tun device")
+	if !privileged() && c.TunFDSocket == "" {
+		log.Print("run it as root (on Windows: elevated): it creates a tun device")
 		return 1
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)

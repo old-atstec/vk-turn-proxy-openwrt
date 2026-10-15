@@ -21,6 +21,10 @@ package main
 //     network <id>    the default network is now <id> (the app's handle of it)
 //     network none    no network
 //     dns <ip[:port]> the resolver for the proxy's own lookups (VK, captcha)
+//     bind <device>   the proxy's sockets from now on leave by <device>
+//                     (bind_device; the Windows app sends the physical
+//                     interface's index before each "network", since its
+//                     routes may hold the default — cmd/vkturn)
 //     reconnect       every connection anew, as SIGHUP
 //
 //     and the end of stdin is the stop: the app closes it, the daemon gives
@@ -70,8 +74,8 @@ func appIdentity(g gateway, up bool) string {
 
 // readAppCommands reads the app's commands until the end of r, then calls
 // stop. reconnect is sent on, never blocking the reader: one pending is
-// enough.
-func readAppCommands(r io.Reader, nw *appNetwork, reconnect chan<- struct{}, stop context.CancelFunc) {
+// enough. bind puts the socket options on (proxy.SetSocketOptions).
+func readAppCommands(r io.Reader, nw *appNetwork, reconnect chan<- struct{}, bind func(string) error, stop context.CancelFunc) {
 	defer stop()
 	sc := bufio.NewScanner(r)
 	for sc.Scan() {
@@ -92,6 +96,10 @@ func readAppCommands(r io.Reader, nw *appNetwork, reconnect chan<- struct{}, sto
 				continue
 			}
 			installResolver(c.DNSServer)
+		case "bind":
+			if err := bind(arg); err != nil {
+				log.Printf("app: bind %q: %v", arg, err)
+			}
 		case "reconnect":
 			select {
 			case reconnect <- struct{}{}:

@@ -14,7 +14,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"golang.zx2c4.com/wireguard/device"
@@ -105,7 +104,7 @@ func (d *daemon) fail(format string, args ...any) int {
 }
 
 func (d *daemon) run(ctx context.Context) int {
-	syscall.Umask(0o077)
+	setUmask()
 	if err := prepareDir(filepath.Dir(d.c.StatusFile)); err != nil {
 		log.Printf("status directory: %v", err)
 		return 1
@@ -140,7 +139,8 @@ func (d *daemon) run(ctx context.Context) int {
 		defer stop()
 		d.appNet = newAppNetwork()
 		d.reconnect = make(chan struct{}, 1)
-		go readAppCommands(d.stdin, d.appNet, d.reconnect, stop)
+		bind := func(dev string) error { return proxy.SetSocketOptions(d.c.Fwmark, dev) }
+		go readAppCommands(d.stdin, d.appNet, d.reconnect, bind, stop)
 	}
 	if d.c.CPUAffinity != 0 {
 		// Before the proxy: its threads are cloned from these and keep the mask.
@@ -194,7 +194,8 @@ func (d *daemon) run(ctx context.Context) int {
 
 // prepareDir makes dir (0700) if it is missing and refuses one that a
 // non-root user could write or that is a symlink: the files in it hold the
-// TURN credentials and the status, and are written by root.
+// TURN credentials and the status, and are written by root (on Windows: by
+// SYSTEM, and the ACL is checked instead — os_windows.go).
 func prepareDir(dir string) error {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return err
@@ -206,13 +207,7 @@ func prepareDir(dir string) error {
 	if fi.Mode()&os.ModeSymlink != 0 || !fi.IsDir() {
 		return fmt.Errorf("%s is not a directory", dir)
 	}
-	if fi.Mode().Perm()&0o022 != 0 {
-		return fmt.Errorf("%s is writable by others (%v)", dir, fi.Mode().Perm())
-	}
-	if st, ok := fi.Sys().(*syscall.Stat_t); ok && st.Uid != uint32(os.Geteuid()) {
-		return fmt.Errorf("%s belongs to uid %d", dir, st.Uid)
-	}
-	return nil
+	return dirIsOurs(dir, fi)
 }
 
 // matchCacheToLinks keeps the credential cache only while the call links it
@@ -496,7 +491,7 @@ func linkStep(up, live bool, deadSince, now time.Time, downAfter time.Duration) 
 
 func (d *daemon) serve(ctx context.Context) int {
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, syscall.SIGHUP, syscall.SIGUSR1, syscall.SIGUSR2)
+	signal.Notify(sig, reconnectSignals...)
 	defer signal.Stop(sig)
 	var stats <-chan time.Time
 	if d.c.StatsEvery > 0 {
@@ -514,7 +509,7 @@ func (d *daemon) serve(ctx context.Context) int {
 			d.printStats()
 			return 0
 		case s := <-sig:
-			if s == syscall.SIGUSR2 {
+			if isProfileSignal(s) {
 				d.profile()
 				continue
 			}

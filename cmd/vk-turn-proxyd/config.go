@@ -61,7 +61,7 @@ type config struct {
 	CookieFile    string
 	CredCache     string
 	Fwmark        uint32
-	BindDevice    string
+	BindDevice    string // a device name; on Windows the interface index (pkg/proxy/sockopt_windows.go)
 	DNSServer     string // host:port, "" = the system's resolver
 	DownAfter     time.Duration
 	StatsEvery    time.Duration
@@ -98,8 +98,8 @@ func loadConfig(path string) (config, error) {
 		return config{}, err
 	}
 	defer f.Close()
-	if fi, err := f.Stat(); err == nil && fi.Mode().Perm()&0o077 != 0 {
-		return config{}, fmt.Errorf("%s is readable by others (%v) and holds the private key — the protocol handler writes it 0600", path, fi.Mode().Perm())
+	if err := configIsPrivate(path, f); err != nil {
+		return config{}, err
 	}
 	return parseConfig(f)
 }

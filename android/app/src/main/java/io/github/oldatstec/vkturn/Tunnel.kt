@@ -65,10 +65,11 @@ object Tunnel {
 
     private fun logDir(ctx: Context) = File(ctx.filesDir, "logs").apply { mkdirs() }
     fun previousLogFile(ctx: Context) = File(logDir(ctx), "previous.log")
+    fun currentLogFile(ctx: Context) = File(logDir(ctx), "current.log")
 
     /** At the process's start: the last process's log becomes "previous". */
     fun attachLogFile(ctx: Context) = synchronized(log) {
-        val cur = File(logDir(ctx), "current.log")
+        val cur = currentLogFile(ctx)
         if (cur.exists()) cur.renameTo(previousLogFile(ctx))
         logFile = cur
     }

@@ -59,6 +59,30 @@ object CrashLog {
 
     private fun prefs(ctx: Context) = ctx.getSharedPreferences("crash", Context.MODE_PRIVATE)
 
+    /** The file "Отправить" shares: the state now, every report, the log of this run and the one before. */
+    fun bundle(ctx: Context): File {
+        val dir = ReportProvider.dir(ctx)
+        dir.listFiles().orEmpty().forEach { it.delete() } // the last share's, already sent
+        val f = File(dir, "vkturn-report-" + SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date()) + ".txt")
+        f.bufferedWriter().use { w ->
+            w.write("VK TURN — отчёт\n")
+            w.write(header(ctx))
+            Tunnel.error?.let { w.write("Последняя ошибка: $it\n") }
+            val reports = reports(ctx)
+            w.write("\n===== Отчёты о падениях: ${reports.size} =====\n")
+            for (r in reports) {
+                w.write("\n----- ${r.file.name} -----\n")
+                w.write(r.text())
+                w.write("\n")
+            }
+            for ((title, log) in listOf("этот запуск" to Tunnel.currentLogFile(ctx), "прошлый запуск" to Tunnel.previousLogFile(ctx))) {
+                w.write("\n===== Журнал: $title =====\n")
+                if (log.isFile) log.bufferedReader().use { it.copyTo(w) } else w.write("(нет)\n")
+            }
+        }
+        return f
+    }
+
     // --- writing ---
 
     /** From the uncaught-exception handler: synchronous, the process is about to die. */

@@ -103,21 +103,30 @@ class LogTab(private val a: Activity) {
             .show()
     }
 
-    /** The latest report, if any, and the log now — as text to a messenger or mail. */
+    /**
+     * One .txt file — the state now, every crash report, the log of this run
+     * and of the one before — to a messenger or mail (ReportProvider). A
+     * file, not the message's text: the logs run to a megabyte, more than a
+     * messenger takes into a text field.
+     */
     private fun send() {
-        val text = buildString {
-            CrashLog.reports(a).firstOrNull()?.let { append(it.text()).append("\n\n=====\n\n") }
-            append("Текущее состояние\n").append(CrashLog.header(a))
-            append("\n--- журнал ---\n").append(Tunnel.logText())
+        val f = try {
+            CrashLog.bundle(a)
+        } catch (e: Exception) {
+            Toast.makeText(a, "Не удалось собрать отчёт: ${e.message}", Toast.LENGTH_LONG).show()
+            return
         }
-        a.startActivity(
-            Intent.createChooser(
-                Intent(Intent.ACTION_SEND).setType("text/plain")
-                    .putExtra(Intent.EXTRA_SUBJECT, "VK TURN: отчёт")
-                    .putExtra(Intent.EXTRA_TEXT, text),
-                "Отправить отчёт",
-            ),
-        )
+        val uri = ReportProvider.uri(a, f)
+        val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+            .putExtra(Intent.EXTRA_STREAM, uri)
+            .putExtra(Intent.EXTRA_SUBJECT, "VK TURN: отчёт ${f.name}")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        send.clipData = android.content.ClipData.newRawUri(f.name, uri) // the grant reaches the chosen app
+        val chooser = Intent.createChooser(send, "Отправить отчёт")
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // The app itself takes shared texts and files (the import): not as a target here.
+            .putExtra(Intent.EXTRA_EXCLUDE_COMPONENTS, arrayOf(android.content.ComponentName(a, MainActivity::class.java)))
+        a.startActivity(chooser)
     }
 
     private fun atEnd(): Boolean {

@@ -59,6 +59,13 @@
             android:screenOrientation="portrait" />
 
 
+        <!-- The report file "Отправить" shares (ReportProvider): to the chosen app only. -->
+        <provider
+            android:name=".ReportProvider"
+            android:authorities="${applicationId}.reports"
+            android:exported="false"
+            android:grantUriPermissions="true" />
+
         <activity
             android:name=".AppsActivity"
             android:exported="false"

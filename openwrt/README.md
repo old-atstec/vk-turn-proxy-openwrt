@@ -75,6 +75,7 @@ config interface 'vkturn'
 	option pool_reserve '1'
 	option uplink_pace '0'                     # KiB/s на соединение, 0 = выкл
 	option spread_relays '1'                   # соединения по всем релеям звонка, не только по первому
+	# option cpu_affinity '0x30'               # маска CPU демона, по умолчанию все; 0x30 — два A72 у RK3399
 	option vk_cookie_file ''                   # опционально: cookies.txt входа в VK
 	option stats_every '0'                     # секунд между строками stats в логе
 	option log_level 'info'                    # info | debug

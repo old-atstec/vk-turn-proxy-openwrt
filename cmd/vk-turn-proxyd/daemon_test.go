@@ -54,6 +54,15 @@ func TestAConfigOfTheProtocolHandlerParses(t *testing.T) {
 	if c, err := parseConfig(strings.NewReader(goodConfig() + "spread_relays=0\n")); err != nil || c.SpreadRelays {
 		t.Fatalf("spread_relays=0: %v, spread %v", err, c.SpreadRelays)
 	}
+	if c.CPUAffinity != 0 {
+		t.Fatalf("cpu_affinity is on by default: 0x%x", c.CPUAffinity)
+	}
+	if c, err := parseConfig(strings.NewReader(goodConfig() + "cpu_affinity=0x30\n")); err != nil || c.CPUAffinity != 0x30 {
+		t.Fatalf("cpu_affinity=0x30: %v, mask 0x%x", err, c.CPUAffinity)
+	}
+	if _, err := parseConfig(strings.NewReader(goodConfig() + "cpu_affinity=big\n")); err == nil {
+		t.Fatal("cpu_affinity=big parsed")
+	}
 }
 
 func TestABadConfigIsNamedWithoutItsSecret(t *testing.T) {

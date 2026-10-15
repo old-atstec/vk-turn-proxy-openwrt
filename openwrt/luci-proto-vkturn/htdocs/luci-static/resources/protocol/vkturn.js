@@ -191,6 +191,14 @@ return network.registerProtocol('vkturn', {
 			_('Spread the connections over every TURN relay VK gives for the call, not only the first. Anonymous mode.'));
 		o.default = o.enabled;
 
+		o = s.taboption('advanced', form.Value, 'cpu_affinity', _('CPU affinity'),
+			_('Optional. A CPU mask the daemon runs on, as <code>taskset</code> takes it. On big.LITTLE SoCs the big cores cost far less per packet: <code>0x30</code> is the two Cortex-A72 of an RK3399 (NanoPi R4S).'));
+		o.validate = function(section_id, value) {
+			if (value == null || value.length == 0 || /^(0x[0-9a-fA-F]+|[0-9]+)$/.test(value))
+				return true;
+			return _('A CPU mask such as 0x30');
+		};
+
 		o = s.taboption('advanced', form.Value, 'cred_cache', _('Credential cache'),
 			_('Where the TURN credentials are kept between restarts. On flash it survives a reboot; under <code>/var/run</code> it does not. Default: <code>/etc/vkturn/&lt;interface&gt;/creds.json</code>.'));
 		o.placeholder = '/etc/vkturn/<interface>/creds.json';

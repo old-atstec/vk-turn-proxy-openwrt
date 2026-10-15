@@ -1761,25 +1761,7 @@ func (p *Proxy) ReceivePacketUntil(done <-chan struct{}, buf []byte) (int, error
 	}
 	select {
 	case pkt := <-p.recvCh:
-		// Downlink disorder is measured HERE and not at the producer side of
-		// recvCh. 🚨 That is not a detail: enqueueRecv is entered by up to 30
-		// goroutines that then race independently for the channel, so the order
-		// observed there is the order they ARRIVED, not the order they won —
-		// measured at ~10x less disorder than the queue actually delivers, and
-		// always in the direction that would have produced the false reading
-		// "the downlink arrives near-ordered". This point is single-threaded
-		// (one conn.ReceiveFunc ⇒ one RoutineReceiveIncoming) and is by
-		// construction the order wireguard-go gets. → rxreorder.go
-		downlinkReorder.observeRx(pkt)
-		n := copy(buf, pkt)
-		// pkt was allocated via recvPktPoolGet by the producer recv
-		// goroutine — return to pool now that contents are copied out.
-		// Saves the per-packet allocation that previously hit GC.
-		// Build 133.
-		recvPktPoolPut(pkt)
-		p.rxBytes.Add(int64(n))
-		p.rxPackets.Add(1)
-		return n, nil
+		return p.deliverRx(pkt, buf), nil
 	case <-p.ctx.Done():
 		return 0, p.ctx.Err()
 	case <-done:

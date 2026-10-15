@@ -17,6 +17,7 @@ import (
 // a DTLS/TURN proxy instead of direct UDP sockets.
 type TURNBind struct {
 	proxy  *proxy.Proxy
+	src    packetSource // the proxy's receive queue; a fake in the batch test
 	mu     sync.Mutex
 	closed bool
 	// done belongs to the CURRENT open: made by open, closed by Close (once,
@@ -28,7 +29,13 @@ type TURNBind struct {
 
 // NewTURNBind creates a new TURNBind backed by the given proxy.
 func NewTURNBind(p *proxy.Proxy) *TURNBind {
-	return &TURNBind{proxy: p}
+	return &TURNBind{proxy: p, src: p}
+}
+
+// packetSource is the proxy's receive side as the bind uses it.
+type packetSource interface {
+	ReceivePacketUntil(done <-chan struct{}, buf []byte) (int, error)
+	TryReceivePacket(buf []byte) (int, bool)
 }
 
 // Open starts the proxy and returns a receive function.
@@ -104,16 +111,29 @@ func (b *TURNBind) receive(done <-chan struct{}, packets [][]byte, sizes []int, 
 	if len(packets) == 0 {
 		return 0, nil
 	}
-	n, err := b.proxy.ReceivePacketUntil(done, packets[0])
+	n, err := b.src.ReceivePacketUntil(done, packets[0])
 	if err != nil {
 		if b.isClosed() || errors.Is(err, context.Canceled) || errors.Is(err, net.ErrClosed) {
 			return 0, net.ErrClosed
 		}
 		return 0, err
 	}
-	sizes[0] = n
-	eps[0] = &TURNEndpoint{}
-	return 1, nil
+	// The first packet waited; the rest of the batch is what is already
+	// queued, taken without waiting (proxy/rxbatch.go: one wake-up of the
+	// peer's receiver and one GRO'd tun write per batch, not per packet).
+	// One endpoint for the batch: it is a constant, nothing is stored in it.
+	ep := &TURNEndpoint{}
+	sizes[0], eps[0] = n, ep
+	count := 1
+	for count < len(packets) {
+		n, ok := b.src.TryReceivePacket(packets[count])
+		if !ok {
+			break
+		}
+		sizes[count], eps[count] = n, ep
+		count++
+	}
+	return count, nil
 }
 
 func (b *TURNBind) isClosed() bool {
@@ -159,9 +179,10 @@ func (b *TURNBind) ParseEndpoint(s string) (conn.Endpoint, error) {
 	return &TURNEndpoint{addr: s}, nil
 }
 
-// BatchSize returns 1 (no batching through TURN).
+// BatchSize is wireguard-go's batch for a socket bind: receive hands over
+// up to that many packets per call, as many as are queued.
 func (b *TURNBind) BatchSize() int {
-	return 1
+	return conn.IdealBatchSize
 }
 
 // TURNEndpoint is a dummy endpoint since all traffic goes through

@@ -47,10 +47,11 @@ type daemon struct {
 	deadSince time.Time // the tunnel stopped carrying, while up
 	kickedAt  time.Time // the last reconnect for a stale handshake
 	lastErr   string
+	procs     int // GOMAXPROCS: the pinned CPUs' count, -1 = Go's default
 }
 
 func newDaemon(c config) *daemon {
-	d := &daemon{c: c}
+	d := &daemon{c: c, procs: -1}
 	d.st = status{
 		Version:          version,
 		Commit:           commit,
@@ -127,6 +128,15 @@ func (d *daemon) run(ctx context.Context) int {
 		log.Printf("the proxy's sockets: mark 0x%x, device %q", d.c.Fwmark, d.c.BindDevice)
 	}
 	installResolver(d.c.DNSServer)
+	if d.c.CPUAffinity != 0 {
+		// Before the proxy: its threads are cloned from these and keep the mask.
+		if n, err := pinCPUs(d.c.CPUAffinity); err != nil {
+			log.Printf("cpu_affinity 0x%x: %v — running on every CPU", d.c.CPUAffinity, err)
+		} else {
+			d.procs = n
+			log.Printf("pinned to CPU mask 0x%x (%d CPUs)", d.c.CPUAffinity, n)
+		}
+	}
 	if d.c.CookieFile != "" {
 		if err := d.loadCookie(); err != nil {
 			return d.fail("vk_cookie_file: %v", err)
@@ -295,7 +305,7 @@ func (d *daemon) startProxy() {
 		NumConns:      c.Conns,
 		CredCachePath: c.CredCache,
 		CaptchaSolver: noCaptchaUI,
-		GOMAXPROCS:    -1,
+		GOMAXPROCS:    d.procs,
 		CredPoolSize:  size,
 		SpreadRelays:  c.SpreadRelays,
 	})

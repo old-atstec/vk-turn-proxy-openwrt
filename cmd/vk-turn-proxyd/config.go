@@ -56,7 +56,8 @@ type config struct {
 	TurnPort      string
 	PoolReserve   int
 	UplinkPaceKiB int
-	SpreadRelays  bool // every relay of the call, not the first (proxy.Config.SpreadRelays)
+	SpreadRelays  bool   // every relay of the call, not the first (proxy.Config.SpreadRelays)
+	CPUAffinity   uint64 // CPU mask the daemon runs on, 0 = every CPU (affinity_linux.go)
 	CookieFile    string
 	CredCache     string
 	Fwmark        uint32
@@ -197,6 +198,8 @@ func (c *config) set(k, v string) error {
 		var m uint64
 		m, err = strconv.ParseUint(v, 0, 32)
 		c.Fwmark = uint32(m)
+	case "cpu_affinity":
+		c.CPUAffinity, err = cpuMask(v)
 	case "bind_device":
 		c.BindDevice = v
 	case "dns_server":
@@ -292,6 +295,19 @@ func intIn(v string, lo, hi int) (int, error) {
 		return 0, fmt.Errorf("out of %d…%d", lo, hi)
 	}
 	return n, nil
+}
+
+// cpuMask is cpu_affinity: a CPU bit mask as taskset takes it (0x30 = CPUs 4
+// and 5); empty or 0 is off.
+func cpuMask(v string) (uint64, error) {
+	if v == "" || v == "0" {
+		return 0, nil
+	}
+	m, err := strconv.ParseUint(v, 0, 64)
+	if err != nil {
+		return 0, errors.New("a CPU mask such as 0x30")
+	}
+	return m, nil
 }
 
 func boolOf(v string) (bool, error) {

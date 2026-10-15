@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/exec"
@@ -48,6 +49,11 @@ type daemon struct {
 	kickedAt  time.Time // the last reconnect for a stale handshake
 	lastErr   string
 	procs     int // GOMAXPROCS: the pinned CPUs' count, -1 = Go's default
+
+	// The app mode (app.go): its commands on stdin, the network as it told it.
+	stdin     io.Reader
+	appNet    *appNetwork
+	reconnect chan struct{}
 }
 
 func newDaemon(c config) *daemon {
@@ -128,6 +134,14 @@ func (d *daemon) run(ctx context.Context) int {
 		log.Printf("the proxy's sockets: mark 0x%x, device %q", d.c.Fwmark, d.c.BindDevice)
 	}
 	installResolver(d.c.DNSServer)
+	if d.stdin != nil {
+		var stop context.CancelFunc
+		ctx, stop = context.WithCancel(ctx)
+		defer stop()
+		d.appNet = newAppNetwork()
+		d.reconnect = make(chan struct{}, 1)
+		go readAppCommands(d.stdin, d.appNet, d.reconnect, stop)
+	}
 	if d.c.CPUAffinity != 0 {
 		// Before the proxy: its threads are cloned from these and keep the mask.
 		if n, err := pinCPUs(d.c.CPUAffinity); err != nil {
@@ -164,7 +178,11 @@ func (d *daemon) run(ctx context.Context) int {
 
 	mctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	mon := newNetMonitor(func() (gateway, bool) { return readDefaultRoute(d.c.Iface) }, networkIdentity)
+	read, identity := func() (gateway, bool) { return readDefaultRoute(d.c.Iface) }, networkIdentity
+	if d.appNet != nil {
+		read, identity = d.appNet.read, appIdentity
+	}
+	mon := newNetMonitor(read, identity)
 	if mon.up {
 		d.st.WAN = mon.cur.String()
 		log.Printf("network: via %s", mon.cur)
@@ -374,13 +392,9 @@ func (d *daemon) waitFirstSession(ctx context.Context) error {
 // proxy's bind. The device is up and has no address: netifd gives it one
 // when the hook says "up".
 func (d *daemon) attach() error {
-	tdev, err := tun.CreateTUN(d.c.Iface, d.c.MTU)
+	tdev, err := d.openTUN()
 	if err != nil {
-		return fmt.Errorf("tun %s: %w", d.c.Iface, err)
-	}
-	if err := setLinkUp(d.c.Iface); err != nil {
-		_ = tdev.Close()
-		return fmt.Errorf("tun %s up: %w", d.c.Iface, err)
+		return err
 	}
 	uapi, err := uapiConfig(d.c)
 	if err != nil {
@@ -396,6 +410,27 @@ func (d *daemon) attach() error {
 	}
 	log.Printf("tunnel: %s mtu %d", d.c.Iface, d.c.MTU)
 	return nil
+}
+
+// openTUN: the router's own device, named after the interface — or, in the
+// app mode, the one the app established.
+func (d *daemon) openTUN() (tun.Device, error) {
+	if d.c.TunFDSocket != "" {
+		tdev, err := tunFromApp(d.c.TunFDSocket)
+		if err != nil {
+			return nil, fmt.Errorf("tun from the app: %w", err)
+		}
+		return tdev, nil
+	}
+	tdev, err := tun.CreateTUN(d.c.Iface, d.c.MTU)
+	if err != nil {
+		return nil, fmt.Errorf("tun %s: %w", d.c.Iface, err)
+	}
+	if err := setLinkUp(d.c.Iface); err != nil {
+		_ = tdev.Close()
+		return nil, fmt.Errorf("tun %s up: %w", d.c.Iface, err)
+	}
+	return tdev, nil
 }
 
 func (d *daemon) waitHandshake(ctx context.Context) bool {
@@ -484,6 +519,9 @@ func (d *daemon) serve(ctx context.Context) int {
 				continue
 			}
 			log.Printf("%v: reconnecting every connection", s)
+			d.p.ForceReconnect()
+		case <-d.reconnect:
+			log.Print("app: reconnecting every connection")
 			d.p.ForceReconnect()
 		case <-stats:
 			d.printStats()

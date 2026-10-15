@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- a tunnel: an arch with a road into it -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,74 L30,52 A24,24 0 0,1 78,52 L78,74 L68,74 L68,52 A14,14 0 0,0 40,52 L40,74 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M51,58 L57,58 L57,64 L51,64 Z M51,68 L57,68 L57,74 L51,74 Z" />
+</vector>

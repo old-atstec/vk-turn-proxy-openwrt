@@ -34,15 +34,16 @@ var socketOpts atomic.Pointer[sockOpts]
 var setSockOpts = platformSetSockOpts
 
 // SetSocketOptions makes every socket the proxy opens from now on carry the
-// mark (0 = none) and be bound to the device ("" = none). Both empty turns
-// the options off. An error: the platform has no such options.
+// mark (0 = none) and be bound to the device ("" = none; on Windows an
+// interface index, sockopt_windows.go). Both empty turns the options off. An
+// error: the platform has no such options.
 func SetSocketOptions(mark uint32, device string) error {
 	if mark == 0 && device == "" {
 		socketOpts.Store(nil)
 		return nil
 	}
 	if !sockOptsSupported {
-		return errors.New("socket mark and bound device are supported on Linux only")
+		return errors.New("socket mark and bound device are supported on Linux and Windows only")
 	}
 	socketOpts.Store(&sockOpts{mark: mark, device: device})
 	return nil

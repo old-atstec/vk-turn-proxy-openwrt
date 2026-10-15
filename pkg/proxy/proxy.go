@@ -38,6 +38,7 @@ type Config struct {
 	TurnServer       string        // override TURN server host (optional)
 	TurnPort         string        // override TURN port (optional)
 	VKLink           string        // VK call invite link or link ID
+	VKLinks          []string      // every call link (its first in VKLink's place); empty = VKLink alone — links.go
 	UseDTLS          bool          // true = DTLS obfuscation (default mode)
 	UseUDP           bool          // true = UDP to TURN, false = TCP
 	NumConns         int           // number of concurrent connections (default 1)
@@ -182,6 +183,9 @@ type Stats struct {
 	CaptchaImageURL        string  `json:"captcha_image_url,omitempty"` // non-empty when captcha is pending
 	CaptchaSID             string  `json:"captcha_sid,omitempty"`       // captcha_sid for the pending captcha
 	AuthError              string  `json:"auth_error,omitempty"`        // non-empty when cookie (VKAuth) auth hit an unrecoverable rejection — the iOS app shows it + stops the tunnel
+
+	// Links is per call link, by position (links.go).
+	Links []LinkStats `json:"links,omitempty"`
 }
 
 // Proxy manages the DTLS+TURN tunnel to the peer server.
@@ -192,6 +196,7 @@ type Proxy struct {
 
 	peer   *net.UDPAddr
 	linkID string
+	links  *linkSet // every call link; linkID is links.ids[0] (links.go)
 
 	// For packet I/O from the WireGuard side. sendCh carries a sendItem rather
 	// than a bare []byte so each packet's enqueue instant travels WITH it —
@@ -593,7 +598,8 @@ func NewProxy(cfg Config) *Proxy {
 	ctx, cancel := context.WithCancel(context.Background())
 	sessCtx, sessCancel := context.WithCancel(ctx)
 	p := &Proxy{
-		linkID:            parseVKLinkID(cfg.VKLink), // fixed here, never in Start
+		linkID:            parseVKLinkID(firstLink(cfg)), // fixed here, never in Start
+		links:             newLinkSet(parseVKLinkIDs(cfg)),
 		config:            cfg,
 		ctx:               ctx,
 		cancel:            cancel,
@@ -1799,6 +1805,7 @@ func (p *Proxy) GetStats() Stats {
 		CredPoolDistinctRelays: int32(distinctRelays),
 		CredPoolQuotaRefusals:  quotaRefusals,
 		CredPoolMintPausedSec:  int32((mintPaused + time.Second - 1) / time.Second),
+		Links:                  p.linkStats(),
 		TunnelUptimeSec:        int64(time.Since(p.startedAt).Seconds()),
 		CaptchaImageURL:        captchaURL,
 		CaptchaSID:             captchaSID,
@@ -2345,7 +2352,15 @@ func (p *Proxy) fetchFreshCreds(allowCaptchaBlock bool, slot int) (string, *TURN
 		// savedClientID="" preserves existing mid-session behavior — proxy.go
 		// doesn't track client_id on captcha-retry today (independent of the
 		// pre-bootstrap captcha flow which does pin client_id strictly).
-		c, err := GetVKCreds(p.linkID, solver, solvedSID, solvedKey, solvedTs, solvedAttempt, savedToken1, "")
+		// The slot's link; a dead call moves the mint on to the next live
+		// link at once (links.go). The captcha tokens belong to the first
+		// attempt only.
+		c, err := p.links.mint(slot, func(linkID string, first bool) (*TURNCreds, error) {
+			if !first {
+				solvedSID, solvedKey, solvedTs, solvedAttempt, savedToken1 = "", "", 0, 0, ""
+			}
+			return GetVKCreds(linkID, solver, solvedSID, solvedKey, solvedTs, solvedAttempt, savedToken1, "")
+		})
 		if err != nil {
 			return "", nil, fmt.Errorf("get VK creds: %w", err)
 		}

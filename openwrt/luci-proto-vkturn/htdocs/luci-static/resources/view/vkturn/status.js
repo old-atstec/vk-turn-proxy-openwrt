@@ -62,6 +62,18 @@ function renderInterface(name, st) {
 		row(_('Version'), st.commit ? '%s (%s)'.format(st.version, st.commit) : st.version)
 	];
 
+	if (Array.isArray(st.links) && st.links.length > 1)
+		st.links.forEach(function(l, i) {
+			const dead = l.dead_for_sec > 0
+				? E('span', { 'class': 'label warning' }, [ _('call gone — retried in %d s').format(l.dead_for_sec) ])
+				: _('live');
+			rows.push(row(_('Call link %d').format(i + 1), E('span', {}, [
+				dead, ' — ',
+				_('%d connections on %d credentials; %d mints, %d failed').format(l.active, l.creds, l.mints, l.failures),
+				l.last_error ? E('br') : '',
+				l.last_error ? E('small', {}, [ l.last_error ]) : ''
+			])));
+		});
 	if (st.quota_refusals > 0)
 		rows.push(row(_('Relay refusals (486)'), '%d'.format(st.quota_refusals) + (st.mint_paused_sec > 0 ? ' — ' + _('minting paused for %d s').format(st.mint_paused_sec) : '')));
 	if (st.auth_error)

@@ -462,3 +462,32 @@ func TestTheVKRUCallLinkIsAccepted(t *testing.T) {
 		t.Fatalf("vk.ru link: %v %v", c.VKLinks, err)
 	}
 }
+
+// A cache written moments ago is dropped (its slots would all load pending
+// and the pool would wait ten minutes); an old one is kept.
+func TestAFreshCredentialCacheIsDropped(t *testing.T) {
+	cache := filepath.Join(t.TempDir(), "creds.json")
+	if err := os.WriteFile(cache, []byte(`{"creds":[]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-30 * time.Minute)
+	if err := os.Chtimes(cache, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if dropFreshCache(cache, time.Now()) {
+		t.Fatal("a 30-minute-old cache was dropped")
+	}
+	now := time.Now()
+	if err := os.Chtimes(cache, now, now); err != nil {
+		t.Fatal(err)
+	}
+	if !dropFreshCache(cache, now.Add(time.Minute)) {
+		t.Fatal("a cache written a minute ago was kept")
+	}
+	if _, err := os.Stat(cache); !os.IsNotExist(err) {
+		t.Fatal("the fresh cache is still there")
+	}
+	if dropFreshCache(cache, now) {
+		t.Fatal("a missing cache reported as dropped")
+	}
+}

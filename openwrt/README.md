@@ -20,6 +20,12 @@ LAN-клиент → NetShift / sing-box (outbound direct, bind_interface=vkturn
 | netifd | ставит и снимает адреса и маршруты, перезапускает демон, если тот упал |
 | rpcd-объект `vkturn` (ucode) | `status`, `reconnect`, `generateKeyPair`, `getPublicKey` для LuCI и консоли |
 
+Когда туннель считается живым: есть хотя бы одна TURN-сессия **и** handshake WireGuard моложе
+140 с (keepalive заставляет WireGuard перехэндшейкиваться каждые 120 с, на живом пути — за доли
+секунды). Иначе через `down_after` секунд интерфейс уходит в `down`; netifd снимает адрес, и
+sing-box перестаёт слать в него трафик (запросы к доменам секции падают, мимо туннеля не утекают).
+Как только туннель ожил — снова `up`.
+
 Чего демон **не делает никогда**: не трогает маршрут по умолчанию, `/etc/resolv.conf`, dnsmasq,
 таблицы и правила маршрутизации, не создаёт маршрутов `/32`, не вызывает `ip`, не ведёт журнал
 отката и ничего не пишет в текущий каталог. Пока туннель не несёт трафик, интерфейс не `up` —
@@ -30,6 +36,10 @@ NetShift и sing-box не шлют пакеты в мёртвый туннель
 ```sh
 apk add --allow-untrusted ./vk-turn-proxy-*.apk ./luci-proto-vkturn-*.apk
 ```
+
+netifd читает обработчики протоколов только при старте: после **первой** установки протокол
+`vkturn` появится после `service network restart` (короткий обрыв всех интерфейсов) или ребута.
+Пакет сам сеть не перезапускает. Обновления пакета перезапуска не требуют.
 
 Зависимости: `kmod-tun`, `ca-bundle`, `rpcd`, `rpcd-mod-ucode`. `ip-full` и `wireguard-tools`
 не нужны — ключи генерирует сам демон (`vk-turn-proxyd genkey`, `vk-turn-proxyd pubkey`).
@@ -82,6 +92,19 @@ netifd перезапускает интерфейс с новой ссылко�
 ```sh
 wg set wg-turn peer <pubkey> allowed-ips 10.66.66.2/32   # и [Peer] в конфиг wg-turn
 ```
+
+### Кэш кредов и перезапуски
+
+Пул ядра загружает из кэша слоты, использованные за последние 10 минут, как «занятые»: релей
+может ещё держать их аллокации. Если заняты все слоты, пул ждёт эти 10 минут. Поэтому демон
+**не берёт кэш, записанный меньше 11 минут назад** (`ifup`, обновление пакета, ребут), и сразу
+получает свежие креды (~1 с по пути VK Звонков). Более старый кэш используется — он экономит
+выпуск кредов после долгого простоя, особенно если VK потребует капчу.
+
+Если релеи VK недоступны при живом WAN (обрыв пути), соединения не могут вернуть аллокации, и
+их слоты пул помечает занятыми на ~10 мин; туннель живёт на оставшихся. Запас даёт
+`option pool_reserve` (по умолчанию 1, в iOS-приложении 3): каждая единица — ещё один набор
+из ceil(conns/10) личностей.
 
 ### Статус
 
@@ -154,14 +177,25 @@ uci commit firewall && service firewall reload
 
 ## Сборка
 
+Два пути к одним и тем же пакетам:
+
 ```sh
-openwrt/build.sh                      # rockchip/armv8, OpenWrt 25.12.4
+openwrt/package-native.sh                 # быстро: go build + apk mkpkg, секунды
+ARCH=x86_64 openwrt/package-native.sh     # aarch64_generic по умолчанию; x86_64, arm_cortex-a7*, mipsel_24kc
+openwrt/build.sh                          # эталон: официальный SDK, golang-package.mk
 TARGET=x86/64 openwrt/build.sh
 ```
 
-Официальный SDK в Docker (sha256 сверяется с `sha256sums` релиза), Go собирается из исходников
+`package-native.sh` собирает демон Go хоста (`CGO_ENABLED=0`, `-trimpath`, `-mod=readonly`) и
+упаковывает `apk mkpkg` (apk-tools 3 из Alpine edge, нативно) по правилам
+`include/package-pack.mk`: те же метаданные, обёртки скриптов (`default_postinst`/`default_prerm`),
+список файлов в `/lib/apk/packages/<pkg>.list`; скрипты пакета берутся из его Makefile.
+
+`build.sh` — официальный SDK в Docker (sha256 сверяется с `sha256sums` релиза), Go собирается из исходников
 фидом `packages/lang/golang`, модули сверяются с `go.sum` и checksum database. Пакеты и
 `SHA256SUMS` — в `openwrt/out/<target>/`. Для фида OpenWrt Makefile пакета ссылается на
 репозиторий по закреплённому коммиту (`PKG_SOURCE_VERSION`).
+
+После обновления пакета `post-upgrade` перезапускает работающие интерфейсы `vkturn`.
 
 Тесты: `tools/test.sh` (или `go test ./cmd/... ./pkg/...`).

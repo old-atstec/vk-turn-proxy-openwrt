@@ -25,10 +25,13 @@ import (
 
 var socketControl = proxy.SocketControl
 
-// handshakeStale: WireGuard drops a session's keys 180 s after its handshake
-// (REJECT_AFTER_TIME); with the keepalive a live tunnel handshakes every two
-// minutes, so a handshake older than this is a tunnel that carries nothing.
-const handshakeStale = 180 * time.Second
+// handshakeStale: the keepalive keeps the tunnel sending, so WireGuard
+// handshakes anew every REKEY_AFTER_TIME (120 s) and, over a live path, has
+// its answer within a round trip; retries go every 5 s. A handshake older than
+// this is a path that answers nothing — whatever the proxy's session count
+// says: over a path that went silent its sessions die one by one, over
+// minutes (seen on the router: 20 → 4 in 150 s with every packet dropped).
+const handshakeStale = 140 * time.Second
 
 type daemon struct {
 	c      config
@@ -108,6 +111,9 @@ func (d *daemon) run(ctx context.Context) int {
 			return d.fail("cred_cache: %v", err)
 		} else if dropped {
 			log.Print("the call link changed: the credential cache of the old one is dropped")
+		}
+		if dropFreshCache(d.c.CredCache, time.Now()) {
+			log.Printf("the credential cache is from a run that ended less than %s ago: minting fresh (its identities may still hold seats at the relay)", cacheFreshWindow)
 		}
 	}
 	if err := proxy.SetSocketOptions(d.c.Fwmark, d.c.BindDevice); err != nil {
@@ -213,6 +219,24 @@ func matchCacheToLink(cache, link string) (bool, error) {
 		return false, err
 	}
 	return dropped, os.Rename(tmp.Name(), mark)
+}
+
+// cacheFreshWindow: the pool loads a slot used in its last ten minutes as
+// PENDING — the relay may still hold its allocations — and a pool whose every
+// slot is pending mints nothing and waits those minutes out (seen on the
+// router: a restart one second after a stop sat ten minutes at zero
+// connections). A restart that soon — ifup, an upgrade, a reboot — mints fresh
+// identities instead (the VK Calls path takes about a second); an older cache
+// is kept and spares the mints, which matters most when VK asks for a captcha.
+const cacheFreshWindow = 11 * time.Minute
+
+// dropFreshCache removes the cache when it was written within the window.
+func dropFreshCache(cache string, now time.Time) bool {
+	fi, err := os.Lstat(cache)
+	if err != nil || !fi.Mode().IsRegular() || now.Sub(fi.ModTime()) >= cacheFreshWindow {
+		return false
+	}
+	return os.Remove(cache) == nil
 }
 
 func (d *daemon) loadCookie() error {

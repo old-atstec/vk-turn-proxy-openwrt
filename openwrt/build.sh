@@ -73,7 +73,11 @@ g="git -c safe.directory=/src -C /src"
 commit=$($g rev-parse HEAD 2>/dev/null || echo local)
 [ -z "$($g status --porcelain 2>/dev/null)" ] || commit="$commit-dirty"
 make package/vk-turn-proxy/clean >/dev/null || true
-timeout "$BUILD_TIMEOUT" make -j"$(nproc)" package/vk-turn-proxy/compile VKTURN_SRC=/build-src VKTURN_COMMIT="$commit" V=s > /out/build.log 2>&1 \
+# Parallel first; some dependencies (lua) lose the jobserver of make under -j —
+# the retry is serial.
+pkg="package/vk-turn-proxy/compile VKTURN_SRC=/build-src VKTURN_COMMIT=$commit"
+timeout "$BUILD_TIMEOUT" make -j"$(nproc)" $pkg V=s > /out/build.log 2>&1 \
+	|| timeout "$BUILD_TIMEOUT" make -j1 $pkg V=s >> /out/build.log 2>&1 \
 	|| { tail -n 60 /out/build.log; exit 1; }
 timeout 30m make -j"$(nproc)" package/luci-proto-vkturn/compile V=s >> /out/build.log 2>&1 \
 	|| { tail -n 60 /out/build.log; exit 1; }

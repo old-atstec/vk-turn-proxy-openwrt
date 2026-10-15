@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=vk-turn-proxy
 PKG_VERSION:=0.1.0
-PKG_RELEASE:=1
+PKG_RELEASE:=3
 
 # VKTURN_SRC (openwrt/build.sh): a local tree instead of the pinned commit,
 # VKTURN_COMMIT its commit for the version string. Variables of our own: a
@@ -71,9 +71,16 @@ endef
 
 define Package/vk-turn-proxy/postinst
 #!/bin/sh
-[ -n "$${IPKG_INSTROOT}" ] || {
-	/etc/init.d/rpcd reload
-}
+[ -n "$${IPKG_INSTROOT}" ] && exit 0
+/etc/init.d/rpcd reload
+# An upgrade: the running daemons still run the old binary — restart their
+# interfaces (each gives its TURN allocations back first).
+if [ "$${PKG_UPGRADE}" = 1 ]; then
+	for dir in /var/run/vkturn/*/; do
+		[ -f "$${dir}config" ] || continue
+		ifup "$$(basename "$$dir")"
+	done
+fi
 exit 0
 endef
 

@@ -22,18 +22,7 @@ function validName(name) {
 	return type(name) == 'string' && match(name, /^[A-Za-z0-9_.-]{1,15}$/) != null;
 }
 
-function readStatus(name) {
-	const raw = readfile(`${RUN}/${name}/status.json`);
-	if (!raw)
-		return null;
-	const st = json(raw);
-	if (type(st) != 'object')
-		return null;
-	st.age = time() - (st.updated ?? 0);
-	st.running = daemonPid(name, st.pid) != null;
-	return st;
-}
-
+// Declared before its callers: ucode does not hoist functions.
 // daemonPid: pid, if it is the daemon running this interface's config.
 function daemonPid(name, pid) {
 	if (type(pid) != 'int' || pid <= 1)
@@ -45,6 +34,18 @@ function daemonPid(name, pid) {
 	if (argv[0] != BIN || index(argv, `${RUN}/${name}/config`) < 0)
 		return null;
 	return pid;
+}
+
+function readStatus(name) {
+	const raw = readfile(`${RUN}/${name}/status.json`);
+	if (!raw)
+		return null;
+	const st = json(raw);
+	if (type(st) != 'object')
+		return null;
+	st.age = time() - (st.updated ?? 0);
+	st.running = daemonPid(name, st.pid) != null;
+	return st;
 }
 
 function command(cmd) {

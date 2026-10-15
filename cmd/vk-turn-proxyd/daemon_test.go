@@ -491,3 +491,27 @@ func TestAFreshCredentialCacheIsDropped(t *testing.T) {
 		t.Fatal("a missing cache reported as dropped")
 	}
 }
+
+func TestAStaleHandshakeWithSessionsUpReconnectsAtMostEveryKickEvery(t *testing.T) {
+	now := time.Unix(1_800_000_000, 0)
+	up := proxy.Stats{ActiveConns: 20}
+	stale := now.Add(-handshakeStale - time.Second)
+	if needKick(up, now.Add(-30*time.Second), time.Time{}, now) {
+		t.Fatal("kicked with a fresh handshake")
+	}
+	if !needKick(up, stale, time.Time{}, now) {
+		t.Fatal("no kick with sessions up and a stale handshake")
+	}
+	if needKick(proxy.Stats{}, stale, time.Time{}, now) {
+		t.Fatal("kicked with no session (the proxy is reconnecting already)")
+	}
+	if needKick(up, time.Time{}, time.Time{}, now) {
+		t.Fatal("kicked before the first handshake")
+	}
+	if needKick(up, stale, now.Add(-time.Minute), now) {
+		t.Fatal("kicked again a minute after the last kick")
+	}
+	if !needKick(up, stale, now.Add(-kickEvery), now) {
+		t.Fatal("no kick kickEvery after the last one")
+	}
+}

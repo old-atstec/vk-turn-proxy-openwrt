@@ -25,13 +25,16 @@ import (
 
 var socketControl = proxy.SocketControl
 
-// handshakeStale: the keepalive keeps the tunnel sending, so WireGuard
-// handshakes anew every REKEY_AFTER_TIME (120 s) and, over a live path, has
-// its answer within a round trip; retries go every 5 s. A handshake older than
-// this is a path that answers nothing — whatever the proxy's session count
-// says: over a path that went silent its sessions die one by one, over
-// minutes (seen on the router: 20 → 4 in 150 s with every packet dropped).
-const handshakeStale = 140 * time.Second
+// handshakeStale: the keepalive keeps the tunnel sending, and WireGuard
+// handshakes anew on the first send after REKEY_AFTER_TIME (120 s) — on an
+// idle tunnel that is the next keepalive, up to 25 s later — with its answer
+// within a round trip over a live path, retries every 5 s. So a live tunnel's
+// handshake is at most ~145 s old; older is a path that answers nothing,
+// whatever the proxy's session count says: over a path that went silent its
+// sessions die one by one, over minutes (seen on the router: 20 → 4 in 150 s
+// with every packet dropped). 140 s here was measured too tight for an idle
+// tunnel; 160 s leaves the retries room.
+const handshakeStale = 160 * time.Second
 
 type daemon struct {
 	c      config
@@ -42,6 +45,7 @@ type daemon struct {
 	cookie string
 
 	deadSince time.Time // the tunnel stopped carrying, while up
+	kickedAt  time.Time // the last reconnect for a stale handshake
 	lastErr   string
 }
 
@@ -409,6 +413,20 @@ func alive(s proxy.Stats, hs time.Time, now time.Time) bool {
 	return s.ActiveConns > 0 && !hs.IsZero() && now.Sub(hs) < handshakeStale
 }
 
+// kickEvery: at most one reconnect per this long for a stale handshake — a
+// server whose WireGuard is down for good must not churn the relays.
+const kickEvery = 3 * time.Minute
+
+// needKick: sessions are up at the relays, yet WireGuard has had no answer for
+// handshakeStale — the server dropped its side (a restart of the server loses
+// every SRTP session while the relays keep the client's). The proxy's own
+// watchdog notices too, later (about two minutes after a server restart on
+// the router); a reconnect now saves most of that.
+func needKick(s proxy.Stats, hs, lastKick, now time.Time) bool {
+	return s.ActiveConns > 0 && !hs.IsZero() && now.Sub(hs) >= handshakeStale &&
+		(lastKick.IsZero() || now.Sub(lastKick) >= kickEvery)
+}
+
 // linkStep is the up/down decision of one tick: down after downAfter without
 // a live tunnel, up again the moment it lives.
 func linkStep(up, live bool, deadSince, now time.Time, downAfter time.Duration) (newUp bool, newDeadSince time.Time) {
@@ -453,7 +471,13 @@ func (d *daemon) serve(ctx context.Context) int {
 			if msg := proxy.CookieAuthFatalError(); msg != "" {
 				return d.fail("VK refused the login: %s — export the cookies anew", msg)
 			}
-			live := alive(d.p.GetStats(), readWG(d.dev).lastHandshake, now)
+			ps, hs := d.p.GetStats(), readWG(d.dev).lastHandshake
+			if needKick(ps, hs, d.kickedAt, now) {
+				log.Printf("tunnel: %d session(s) up but no WireGuard handshake for %s — the server lost them (a restart?); reconnecting every connection", ps.ActiveConns, now.Sub(hs).Round(time.Second))
+				d.kickedAt = now
+				d.p.ForceReconnect()
+			}
+			live := alive(ps, hs, now)
 			up, since := linkStep(d.linkUp, live, d.deadSince, now, d.c.DownAfter)
 			if since != d.deadSince && !since.IsZero() {
 				log.Printf("tunnel: no live session — down in %s unless it comes back", d.c.DownAfter)

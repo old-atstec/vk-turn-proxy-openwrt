@@ -9,7 +9,7 @@ include $(TOPDIR)/rules.mk
 
 PKG_NAME:=vk-turn-proxy
 PKG_VERSION:=0.1.0
-PKG_RELEASE:=3
+PKG_RELEASE:=5
 
 # VKTURN_SRC (openwrt/build.sh): a local tree instead of the pinned commit,
 # VKTURN_COMMIT its commit for the version string. Variables of our own: a

@@ -107,11 +107,27 @@ daemon_targets() {
 run "vk-turn-proxyd — built and vetted for the router targets" \
     daemon_targets
 
+# The Windows app (windows/): the daemon and the app, x64. Their Windows-only
+# files (the service, iphlpapi, the tray) are compiled and vetted here only —
+# the tests above run their platform-free parts and a fake of the rest.
+windows_targets() {
+    local ok=0 p
+    for p in ./cmd/vk-turn-proxyd ./cmd/vkturn ./pkg/proxy; do
+        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o /dev/null "$p" \
+            || { echo "   build windows $p failed"; ok=1; }
+        CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go vet "$p" \
+            || { echo "   vet windows $p failed"; ok=1; }
+    done
+    return $ok
+}
+run "the Windows app — built and vetted for windows/amd64" \
+    windows_targets
+
 # The packaging scripts: build.sh carries its container script in single
 # quotes, and an apostrophe in a comment there broke the build twice.
 shell_scripts() {
     local ok=0 f
-    for f in openwrt/build.sh openwrt/package-native.sh tools/test.sh; do
+    for f in openwrt/build.sh openwrt/package-native.sh windows/build.sh tools/test.sh; do
         bash -n "$f" || { echo "   $f does not parse"; ok=1; }
     done
     for f in openwrt/vk-turn-proxy/files/vkturn.sh openwrt/vk-turn-proxy/files/vkturn-notify.sh; do

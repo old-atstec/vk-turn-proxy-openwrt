@@ -19,11 +19,13 @@ WireGuard через TURN-релеи звонков VK как **обычный �
 | `openwrt/vk-turn-proxy` | пакет: демон, `/lib/netifd/proto/vkturn.sh`, хук up/down, rpcd-объект `vkturn` |
 | `openwrt/luci-proto-vkturn` | пакет LuCI: форма протокола и страница Status → VK TURN |
 | `android/` | приложение для Android: VPN с раздельным туннелированием по приложениям, движок — тот же демон |
+| `cmd/vkturn`, `windows/` | приложение для Windows (x64): «включил — работает», режимы по доменам (списки sing-box `.srs`), весь трафик, по подсетям; движок — тот же демон |
 
 | Документ | О чём |
 |---|---|
 | [openwrt/README.md](openwrt/README.md) | установка, настройка UCI/LuCI, NetShift, firewall, безопасность |
 | [android/README.md](android/README.md) | Android: устройство, раздельное туннелирование, сборка APK |
+| [windows/README.md](windows/README.md) | Windows: сервис + окно, доменный режим (DNS-перехватчик, NRPT, /32), сборка; [проверки на ПК](docs/windows-testing.md) |
 | [docs/development.md](docs/development.md) | сборка (быстрая и SDK), версии, установка/обновление/удаление, sysupgrade, апстрим |
 | [docs/design.md](docs/design.md) | устройство и почему так: netifd-хук, статус, fwmark, живость туннеля, кэш кредов |
 | [docs/router-testing.md](docs/router-testing.md) | сценарии проверки на роутере и замеры |
@@ -34,6 +36,8 @@ WireGuard через TURN-релеи звонков VK как **обычный �
 
 - `pkg/proxy/sockopt*.go` — `SO_MARK` / `SO_BINDTODEVICE` на всех сокетах прокси (через тот же
   Control-хук, что и dial hook); `net.DialUDP` / `net.ListenUDP` заменены на Dialer / ListenConfig.
+- `pkg/proxy/sockopt_windows.go` — на Windows «устройство» — индекс физического интерфейса:
+  `IP_UNICAST_IF` / `IPV6_UNICAST_IF` держат сокеты прокси мимо маршрутов туннеля.
 - `pkg/proxy/redact.go` — ответы VK (step2, step4, ошибка капчи, методы капчи) и URL капчи
   попадают в лог с замаскированными токенами, TURN-логином и паролем.
 - Тесты, читавшие исходники удалённого iOS-моста, сокращены до проверок самого ядра.

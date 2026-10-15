@@ -1,9 +1,15 @@
 package io.github.oldatstec.vkturn
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import org.json.JSONObject
+import java.io.File
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * The tunnel as the screen sees it: the service's phase, the daemon's status
@@ -19,6 +25,9 @@ object Tunnel {
         private set
     @Volatile var error: String? = null
         private set
+
+    /** The settings the running tunnel was started with: the screen tells when the form left them. */
+    @Volatile var applied: Settings? = null
 
     private const val LOG_LINES = 400
     private val log = ArrayDeque<String>()
@@ -42,8 +51,40 @@ object Tunnel {
         synchronized(log) {
             log.addLast(line)
             while (log.size > LOG_LINES) log.removeFirst()
+            toFile(line)
         }
         changed()
+    }
+
+    // --- the log on disk: it outlives a crash (CrashLog reads the previous process's) ---
+
+    private const val FILE_MAX = 1L shl 20
+    private var logFile: File? = null
+    private var writer: FileWriter? = null
+    private val stamp = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
+
+    private fun logDir(ctx: Context) = File(ctx.filesDir, "logs").apply { mkdirs() }
+    fun previousLogFile(ctx: Context) = File(logDir(ctx), "previous.log")
+
+    /** At the process's start: the last process's log becomes "previous". */
+    fun attachLogFile(ctx: Context) = synchronized(log) {
+        val cur = File(logDir(ctx), "current.log")
+        if (cur.exists()) cur.renameTo(previousLogFile(ctx))
+        logFile = cur
+    }
+
+    private fun toFile(line: String) {
+        val f = logFile ?: return
+        try {
+            val w = writer?.takeIf { f.length() <= FILE_MAX } ?: run {
+                writer?.close()
+                FileWriter(f, f.length() <= FILE_MAX).also { writer = it }
+            }
+            w.write(stamp.format(Date()) + " " + line + "\n")
+            w.flush()
+        } catch (_: Exception) {
+            writer = null
+        }
     }
 
     fun clearLog() = synchronized(log) { log.clear() }

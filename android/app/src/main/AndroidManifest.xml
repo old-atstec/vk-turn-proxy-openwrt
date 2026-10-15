@@ -13,6 +13,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
+        android:name=".App"
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
@@ -57,10 +58,6 @@
             android:label="@string/scan_title"
             android:screenOrientation="portrait" />
 
-        <activity
-            android:name=".LogActivity"
-            android:exported="false"
-            android:label="@string/log_title" />
 
         <activity
             android:name=".AppsActivity"

@@ -27,4 +27,20 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:importantForAutofill">no</item>
     </style>
+
+    <style name="Tab" parent="android:Widget.Material.Button.Borderless">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:textSize">14sp</item>
+    </style>
+
+    <!-- A notice at the top of a tab: tinted with the accent, readable in both themes. -->
+    <style name="Banner">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:layout_marginBottom">12dp</item>
+        <item name="android:padding">12dp</item>
+        <item name="android:background">@drawable/banner_bg</item>
+    </style>
 </resources>

@@ -3,6 +3,20 @@
 Памятка для людей и ИИ-ассистентов. Что это за проект — [README.md](README.md); как пользоваться
 пакетами — [openwrt/README.md](openwrt/README.md).
 
+Пошаговые сценарии — скилы в [.claude/skills/](.claude/skills/) (обычный Markdown, годится и для
+человека):
+
+| Скил | Когда |
+|---|---|
+| [router-install](.claude/skills/router-install/SKILL.md) | первая установка на роутер и настройка интерфейса |
+| [router-update](.claude/skills/router-update/SKILL.md) | обновление пакетов, после sysupgrade, удаление |
+| [android-release](.claude/skills/android-release/SKILL.md) | сборка APK, версия, установка на телефон/эмулятор |
+| [connect-device](.claude/skills/connect-device/SKILL.md) | импорт профиля из панели сервера, «нет связи» |
+
+Сервер и панель выдачи подключений (`vkturn-panel`) — в репозитории **vk-turn-proxy**
+(anton48/vk-turn-proxy и форк old-atstec/vk-turn-proxy): там свои скилы `vps-install`, `vps-update`,
+`issue-connection`, `release`.
+
 ## Где что
 
 | Путь | Что |
@@ -14,6 +28,7 @@
 | `openwrt/luci-proto-vkturn/` | пакет LuCI |
 | `openwrt/package-native.sh`, `openwrt/build.sh` | две сборки одних и тех же пакетов |
 | `android/` | Android-приложение (Kotlin, без AndroidX); демон внутри — `cmd/vk-turn-proxyd` в режиме приложения (`app.go`) |
+| `android/.../ProfileImport.kt`, `ScanActivity.kt` | импорт профиля панели: ссылка `vkturn://`, файл `.vkturn`, QR (ZXing core) |
 | `docs/` | [разработка и релизы](docs/development.md), [устройство и решения](docs/design.md), [проверки на роутере](docs/router-testing.md) |
 | `openwrt/TODO.md` | отложенные доработки |
 
@@ -51,6 +66,16 @@ Linux-специфичное (SO_MARK, `/proc/net/route`) проверяется
 - Новый сокет в `pkg/proxy` — только через `dialControl`/`sockoptControl` (иначе fwmark мимо);
   `dialhook_test.go` и `sockopt_test.go` это ловят.
 - Новый `log.Printf` с ответом VK — через `redactedJSON`/`redactBody`/`redactURL` (`redact_test.go`).
+
+## Профиль из панели сервера
+
+`vkturn://import?c=<base64url(JSON)>`, тот же JSON — файл `.vkturn`. Источник формата — тип
+`Profile` в `panel/profile.go` репозитория vk-turn-proxy; здесь его читают `ProfileImport.kt`
+(Android) и `parseProfile` в `luci-proto-vkturn/.../protocol/vkturn.js` (LuCI). Новые
+**необязательные** поля — можно; переименование или новое обязательное поле — только с `"v": 2`
+и одновременной правкой обоих читателей и панели. В `ProfileImportTest.kt` лежит эталонная ссылка,
+сгенерированная панелью: изменили формат — перегенерируйте её в vk-turn-proxy:
+`VKTURN_VECTOR=1 go test -run TestPrintVector -v ./panel/`.
 
 ## Грабли роутера (OpenWrt 25.12)
 

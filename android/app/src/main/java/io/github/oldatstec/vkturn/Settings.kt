@@ -37,7 +37,7 @@ data class Settings(
         if (psk.isNotEmpty() && !isKey(psk)) return "Preshared key: не ключ WireGuard"
         if (links.isEmpty()) return "Нужна хотя бы одна ссылка на звонок VK"
         if (conns !in 1..120) return "Соединений: от 1 до 120"
-        if (Cidr.parse(address) == null) return "Адрес в туннеле: нужен IPv4 CIDR, например 10.66.66.2/32"
+        if (Cidr.parse(address) == null) return "Адрес в туннеле: нужен IPv4 CIDR, как на роутере, например 10.66.66.2/24"
         if (tunnelDnsList().any { Cidr.parseIp(it) == null }) return "DNS в туннеле: IPv4-адреса через запятую"
         if (fallbackDns.isNotEmpty() && Cidr.parseIp(fallbackDns) == null) return "DNS для запросов к VK: IPv4-адрес"
         if (mtu !in 1000..1400) return "MTU: от 1000 до 1400"
@@ -53,10 +53,19 @@ data class Settings(
 
     fun routeList(): List<Cidr> = routes.split(',', '\n').mapNotNull { Cidr.parse(it.trim()) }
 
-    /** The routes the VPN takes: the user's, minus the local networks if asked. */
+    /**
+     * The routes the VPN takes: the user's, minus the local networks if asked
+     * — but never the tunnel's own subnet (the address's prefix, 10.66.66.0/24
+     * for 10.66.66.2/24): it lies in 10/8, and the server's tunnel address
+     * would go past the tunnel (seen on the emulator: to the home router's
+     * vkturn instead).
+     */
     fun effectiveRoutes(): List<Cidr> {
         val r = routeList().map { it.network() }
-        return if (bypassLan) Cidr.subtract(r, Cidr.LOCAL) else r
+        if (!bypassLan) return r
+        val own = Cidr.parse(address)?.network()
+        val local = if (own != null && own.prefix < 32) Cidr.subtract(Cidr.LOCAL, listOf(own)) else Cidr.LOCAL
+        return Cidr.subtract(r, local)
     }
 
     /** The daemon's config file (cmd/vk-turn-proxyd/config.go). */
@@ -72,6 +81,12 @@ data class Settings(
         links.forEach { kv("vk_link", it) }
         kv("conns", conns)
         kv("turn_transport", if (tcp) "tcp" else "udp")
+        // A reserve set of identities rides one network change without a mint;
+        // after a change the ones in use sit out ~10 min (their seats may live
+        // on at the relay). The router's 1 is one WAN change; a phone flips
+        // Wi-Fi ↔ mobile in seconds — two flips with 1 were 10 dead minutes
+        // on the emulator.
+        kv("pool_reserve", POOL_RESERVE)
         if (dns.isNotEmpty()) kv("dns_server", dns)
         kv("status_file", files.status.path)
         kv("cred_cache", files.credCache.path)
@@ -100,6 +115,8 @@ data class Settings(
     }
 
     companion object {
+        const val POOL_RESERVE = 3
+
         private fun prefs(ctx: Context) = ctx.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
         fun load(ctx: Context): Settings {

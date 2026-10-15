@@ -2,6 +2,7 @@ package io.github.oldatstec.vkturn
 
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import org.json.JSONObject
 
 /**
@@ -37,6 +38,7 @@ object Tunnel {
     }
 
     fun addLog(line: String) {
+        Log.i("vkturn", line) // adb logcat -s vkturn
         synchronized(log) {
             log.addLast(line)
             while (log.size > LOG_LINES) log.removeFirst()

@@ -32,4 +32,6 @@
     <string name="open_captcha">Открыть капчу</string>
     <string name="show_system">Системные</string>
     <string name="search">Поиск</string>
+    <string name="apps_loading">Загрузка списка приложений…</string>
+    <string name="apps_none">Ничего не найдено</string>
 </resources>

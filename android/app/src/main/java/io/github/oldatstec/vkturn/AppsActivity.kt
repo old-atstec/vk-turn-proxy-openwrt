@@ -20,7 +20,9 @@ import kotlin.concurrent.thread
 /**
  * The split tunnel's list: which apps go into the tunnel (or past it, by the
  * mode on the main screen). Apps without the INTERNET permission are not
- * shown — they have nothing to route. Selected apps come first.
+ * shown — they have nothing to route. "System" are the ones without an icon
+ * in the launcher: a preinstalled browser or YouTube is a system app by its
+ * flags, yet the first thing one routes. Selected apps come first.
  */
 class AppsActivity : Activity() {
     private class App(val pkg: String, val label: String, val system: Boolean, val info: ApplicationInfo)
@@ -37,6 +39,7 @@ class AppsActivity : Activity() {
         adapter = Adapter()
         val list = findViewById<ListView>(R.id.list)
         list.adapter = adapter
+        list.emptyView = findViewById(R.id.empty)
         list.setOnItemClickListener { _, _, pos, _ ->
             val a = shown[pos]
             if (!selected.remove(a.pkg)) selected += a.pkg
@@ -62,12 +65,14 @@ class AppsActivity : Activity() {
                 App(
                     pi.packageName,
                     ai.loadLabel(pm).toString(),
-                    ai.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
+                    ai.flags and (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0 &&
+                        pm.getLaunchIntentForPackage(pi.packageName) == null,
                     ai,
                 )
             }
             .sortedWith(compareBy({ it.pkg !in selected }, { it.label.lowercase() }))
         runOnUiThread {
+            findViewById<TextView>(R.id.empty).setText(R.string.apps_none)
             all = apps
             filter()
         }

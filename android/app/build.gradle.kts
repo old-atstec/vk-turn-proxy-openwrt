@@ -70,3 +70,7 @@ android {
         includeInBundle = false
     }
 }
+
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+}

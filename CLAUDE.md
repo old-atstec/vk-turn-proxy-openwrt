@@ -29,6 +29,8 @@
 | `openwrt/package-native.sh`, `openwrt/build.sh` | две сборки одних и тех же пакетов |
 | `android/` | Android-приложение (Kotlin, без AndroidX); демон внутри — `cmd/vk-turn-proxyd` в режиме приложения (`app.go`) |
 | `android/.../ProfileImport.kt`, `ScanActivity.kt` | импорт профиля панели: ссылка `vkturn://`, файл `.vkturn`, QR (ZXing core) |
+| `cmd/vkturn/`, `windows/` | Windows-приложение: сервис SYSTEM + окно (Edge `--app`) и трей; демон — `cmd/vk-turn-proxyd` в режиме приложения, wintun; [windows/README.md](windows/README.md) |
+| `pkg/srs` | разбор sing-box rule-set (`.srs`) и сопоставление доменов (доменный режим Windows) |
 | `docs/` | [разработка и релизы](docs/development.md), [устройство и решения](docs/design.md), [проверки на роутере](docs/router-testing.md) |
 | `openwrt/TODO.md` | отложенные доработки |
 
@@ -41,6 +43,8 @@ openwrt/package-native.sh                                           # apk для
 ARCH=mipsel_24kc openwrt/package-native.sh                          # другая архитектура
 openwrt/build.sh                                                    # эталон: OpenWrt SDK (на Apple silicon — часы, эмуляция)
 android/build.sh                                                    # APK (демон — Go хоста, Gradle — в контейнере)
+windows/build.sh                                                    # zip для Windows x64 (Go хоста + официальный wintun.dll по sha256)
+go run ./cmd/vkturn -demo -daemon <vk-turn-proxyd>                  # окно Windows-приложения на Mac, сеть фальшивая
 ```
 
 Linux-специфичное (SO_MARK, `/proc/net/route`) проверяется в контейнере:
@@ -55,7 +59,10 @@ Linux-специфичное (SO_MARK, `/proc/net/route`) проверяется
 - Коммиты — от `old-atstec <old-atstec@users.noreply.github.com>` (`git config --local`), с
   `Co-Authored-By` ассистента. Push делает владелец.
 - Изменили что-то в пакете — поднимите `PKG_RELEASE` в его Makefile (иначе `apk add` не обновит).
-  Выпуск Android — `vkturnVersionCode` в `android/gradle.properties`.
+  Выпуск Android — `vkturnVersionCode` в `android/gradle.properties`; Windows — `windows/VERSION`.
+- Windows-only код (`*_windows.go`: сервис, iphlpapi, NRPT, трей) на Mac только компилируется
+  (`GOOS=windows go vet ./cmd/vkturn ./cmd/vk-turn-proxyd`); логика — в платформонезависимых файлах
+  с тестами на фальшивой платформе. Живая проверка — на ПК по [docs/windows-testing.md](docs/windows-testing.md).
 - `android/keystore/` — ключ подписи APK; в git не класть, терять нельзя (иначе обновление не встанет).
 - Сборка воспроизводимая: `GOFLAGS=-mod=readonly`, `CGO_ENABLED=0`, `-trimpath`; `GOSUMDB`/`GONOSUMDB`
   не трогать; ничего не ставить из чужих бинарных релизов.
@@ -71,10 +78,11 @@ Linux-специфичное (SO_MARK, `/proc/net/route`) проверяется
 
 `vkturn://import?c=<base64url(JSON)>`, тот же JSON — файл `.vkturn`. Источник формата — тип
 `Profile` в `panel/profile.go` репозитория vk-turn-proxy; здесь его читают `ProfileImport.kt`
-(Android) и `parseProfile` в `luci-proto-vkturn/.../protocol/vkturn.js` (LuCI). Новые
-**необязательные** поля — можно; переименование или новое обязательное поле — только с `"v": 2`
-и одновременной правкой обоих читателей и панели. В `ProfileImportTest.kt` лежит эталонная ссылка,
-сгенерированная панелью: изменили формат — перегенерируйте её в vk-turn-proxy:
+(Android), `parseProfile` в `luci-proto-vkturn/.../protocol/vkturn.js` (LuCI) и `importProfile` в
+`cmd/vkturn/profile.go` (Windows). Новые **необязательные** поля — можно; переименование или новое
+обязательное поле — только с `"v": 2` и одновременной правкой всех трёх читателей и панели. В
+`ProfileImportTest.kt` и `cmd/vkturn/app_test.go` лежит эталонная ссылка, сгенерированная панелью:
+изменили формат — перегенерируйте её в vk-turn-proxy:
 `VKTURN_VECTOR=1 go test -run TestPrintVector -v ./panel/`.
 
 ## Грабли роутера (OpenWrt 25.12)

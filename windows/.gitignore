@@ -1,0 +1,3 @@
+out/
+# wintun's official zip, fetched and checked by build.sh
+.cache/

@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VK TURN</title>
+<style>
+:root {
+  --bg: #f4f5f7; --card: #fff; --fg: #1d1f23; --muted: #6b7280; --line: #e3e5e9;
+  --accent: #2f6fed; --ok: #18a058; --warn: #d97706; --bad: #d03050; --btn: #eef0f3;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #17181b; --card: #212327; --fg: #e8e9eb; --muted: #9aa0a8; --line: #33363c;
+          --accent: #5b8cff; --ok: #36c275; --warn: #f0a33a; --bad: #f0607a; --btn: #2c2f34; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--fg); font: 14px/1.45 "Segoe UI", system-ui, sans-serif; }
+nav { display: flex; gap: 4px; padding: 10px 16px 0; }
+nav button { border: 0; background: none; color: var(--muted); padding: 8px 14px; border-radius: 8px 8px 0 0; font: inherit; cursor: pointer; }
+nav button.on { background: var(--card); color: var(--fg); font-weight: 600; }
+main { background: var(--card); margin: 0 16px 16px; border-radius: 0 10px 10px 10px; padding: 20px; min-height: calc(100vh - 60px); }
+section { display: none; } section.on { display: block; }
+h3 { margin: 22px 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.hero { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 10px 0 18px; }
+#power { width: 120px; height: 120px; border-radius: 50%; border: 0; cursor: pointer; font-size: 46px; color: #fff;
+         background: var(--muted); box-shadow: 0 6px 18px rgba(0,0,0,.18); transition: background .2s, transform .1s; }
+#power:active { transform: scale(.97); }
+#power.running { background: var(--ok); } #power.starting { background: var(--warn); } #power.stopping { background: var(--muted); }
+#phase { font-size: 18px; font-weight: 600; }
+#sub { color: var(--muted); min-height: 1.4em; text-align: center; }
+.seg { display: inline-flex; background: var(--btn); border-radius: 9px; padding: 3px; }
+.seg button { border: 0; background: none; padding: 7px 14px; border-radius: 7px; font: inherit; color: var(--fg); cursor: pointer; }
+.seg button.on { background: var(--card); box-shadow: 0 1px 3px rgba(0,0,0,.15); font-weight: 600; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-top: 14px; }
+.stat { background: var(--bg); border-radius: 8px; padding: 10px 12px; }
+.stat b { display: block; font-size: 17px; } .stat span { color: var(--muted); font-size: 12px; }
+.banner { border-radius: 8px; padding: 10px 12px; margin: 10px 0; display: none; }
+.banner.on { display: block; } .banner.err { background: color-mix(in srgb, var(--bad) 15%, transparent); }
+.banner.info { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 12px; }
+input[type=text], input[type=password], input[type=number], textarea, select {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--fg); font: inherit; }
+textarea { min-height: 70px; resize: vertical; font-family: Consolas, monospace; font-size: 12.5px; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.row > * { flex: 1; } .row > button, .row > .k { flex: none; }
+.btn { border: 0; border-radius: 7px; padding: 8px 14px; background: var(--btn); color: var(--fg); font: inherit; cursor: pointer; }
+.btn.primary { background: var(--accent); color: #fff; } .btn:disabled { opacity: .5; cursor: default; }
+.check { display: flex; gap: 8px; align-items: center; margin: 10px 0; color: var(--fg); font-size: 14px; }
+details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 12px 0; }
+summary { cursor: pointer; font-weight: 600; }
+.lists { margin-top: 8px; font-size: 12.5px; } .lists div { padding: 4px 0; border-bottom: 1px solid var(--line); word-break: break-all; }
+.muted { color: var(--muted); } .bad { color: var(--bad); }
+#log { height: calc(100vh - 150px); overflow: auto; background: var(--bg); border-radius: 8px; padding: 10px; margin: 0;
+       font: 12px/1.4 Consolas, monospace; white-space: pre-wrap; word-break: break-all; }
+#more { position: fixed; right: 40px; bottom: 34px; display: none; }
+.k { font-family: Consolas, monospace; font-size: 12px; word-break: break-all; }
+#importBox { display: none; } #importBox.on { display: block; }
+</style>
+</head>
+<body>
+<nav>
+  <button data-tab="home" class="on">Главная</button>
+  <button data-tab="settings">Настройки</button>
+  <button data-tab="log">Журнал</button>
+</nav>
+<main>
+<section id="home" class="on">
+  <div class="banner err" id="err"></div>
+  <div class="banner info" id="captcha"></div>
+  <div class="hero">
+    <button id="power" title="Включить / выключить">⏻</button>
+    <div id="phase">Выключено</div>
+    <div id="sub"></div>
+    <div class="seg" id="mode">
+      <button data-mode="domains">По доменам</button>
+      <button data-mode="all">Весь трафик</button>
+      <button data-mode="subnets">По подсетям</button>
+    </div>
+  </div>
+  <div id="importBox">
+    <h3>Подключение из панели сервера</h3>
+    <div class="muted">Вставьте ссылку <span class="k">vkturn://…</span> или откройте файл <span class="k">.vkturn</span>, выданные панелью сервера.</div>
+    <textarea id="impText" placeholder="vkturn://import?c=…"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="btn" id="impPaste">Вставить из буфера</button>
+      <button class="btn" id="impFileBtn">Открыть файл…</button>
+      <input type="file" id="impFile" accept=".vkturn,application/json" hidden>
+      <span></span>
+      <button class="btn primary" id="impGo">Импортировать и подключить</button>
+    </div>
+    <div id="impPreview" class="muted" style="margin-top:6px"></div>
+  </div>
+  <div class="grid" id="stats"></div>
+</section>
+
+<section id="settings">
+  <div class="banner err" id="setErr"></div>
+  <div class="banner info" id="setOk"></div>
+  <button class="btn" id="showImport">Импорт подключения (vkturn://, .vkturn)</button>
+
+  <h3>Что идёт в туннель</h3>
+  <div class="seg" id="mode2">
+    <button data-mode="domains">По доменам</button>
+    <button data-mode="all">Весь трафик</button>
+    <button data-mode="subnets">По подсетям</button>
+  </div>
+  <div id="domainsOpts">
+    <label>Списки доменов — ссылки на sing-box rule-set (.srs), по одной в строке</label>
+    <textarea id="lists" placeholder="https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ai-!cn.srs"></textarea>
+    <div class="row">
+      <label class="check" style="flex:none">Обновлять каждые <input type="number" id="listHours" min="0" max="720" style="width:80px"> ч (0 — только кнопкой)</label>
+      <span></span>
+      <button class="btn" id="refresh">Обновить списки сейчас</button>
+    </div>
+    <div class="lists" id="listState"></div>
+    <label>Свои домены — каждый вместе с поддоменами</label>
+    <textarea id="own" placeholder="example.com"></textarea>
+  </div>
+  <label id="routesLabel">Подсети в туннель (IPv4 CIDR через запятую или строку)</label>
+  <textarea id="routes" placeholder="203.0.113.0/24"></textarea>
+  <label class="check"><input type="checkbox" id="bypass"> Локальные сети (10/8, 172.16/12, 192.168/16) — мимо туннеля</label>
+
+  <h3>Запуск</h3>
+  <label class="check"><input type="checkbox" id="auto"> Подключаться при запуске Windows</label>
+
+  <details>
+    <summary>Подключение вручную</summary>
+    <label>Сервер (host:port листенера -srtp)</label><input type="text" id="peer">
+    <label>Публичный ключ сервера</label><input type="text" id="serverKey">
+    <label>Приватный ключ этого компьютера</label>
+    <div class="row"><input type="password" id="privKey" placeholder="не изменён"><button class="btn" id="genkey">Новый ключ</button></div>
+    <div class="muted" style="margin-top:4px">Публичный (добавьте пиром на сервер): <span class="k" id="pubKey">—</span> <button class="btn" id="copyPub">Копировать</button></div>
+    <label>Preshared key (необязательно)</label><input type="password" id="psk">
+    <label>Ссылки на звонки VK — по одной в строке</label><textarea id="links"></textarea>
+    <div class="row">
+      <div><label>Адрес в туннеле</label><input type="text" id="address" placeholder="10.66.66.2/24"></div>
+      <div><label>DNS в туннеле</label><input type="text" id="tdns"></div>
+    </div>
+    <div class="row">
+      <div><label>DNS для запросов к VK (если у сети нет своего)</label><input type="text" id="fdns"></div>
+      <div><label>MTU</label><input type="number" id="mtu"></div>
+      <div><label>Соединений</label><input type="number" id="conns"></div>
+    </div>
+    <label class="check"><input type="checkbox" id="tcp"> TURN поверх TCP</label>
+  </details>
+  <div class="row"><span></span><button class="btn primary" id="save">Сохранить</button></div>
+</section>
+
+<section id="log">
+  <pre id="logPre"></pre>
+  <button class="btn primary" id="more"></button>
+</section>
+</main>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+let settings = null, view = null, tab = "home";
+
+async function api(path, body) {
+  const opt = body === undefined ? {} : {method: "POST", headers: {"X-VKTurn": "1", "Content-Type": "application/json"}, body: JSON.stringify(body)};
+  const r = await fetch(path, opt);
+  if (r.status === 401) throw new Error("Нет доступа: откройте VK TURN из меню Пуск");
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || r.statusText);
+  return j;
+}
+
+// --- tabs ---
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => showTab(b.dataset.tab));
+function showTab(t) {
+  tab = t;
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === t));
+  document.querySelectorAll("section").forEach(s => s.classList.toggle("on", s.id === t));
+  if (t === "settings") loadSettings();
+  if (t === "log") pollLog();
+}
+
+// --- home ---
+const phaseText = {off: "Выключено", starting: "Подключение…", running: "Подключено", stopping: "Отключение…"};
+const stateText = {starting: "Запуск…", connecting: "Подключение к релеям VK…", handshake: "Рукопожатие WireGuard…",
+                   up: "Туннель работает", down: "Туннель не передаёт данные — переподключение…", stopping: "Отключение…"};
+function mb(n) { return n >= 1e9 ? (n/1e9).toFixed(2) + " ГБ" : (n/1e6).toFixed(1) + " МБ"; }
+function ago(sec) { if (!sec) return "—"; const d = Math.max(0, Date.now()/1000 - sec); return d < 90 ? Math.round(d) + " с назад" : Math.round(d/60) + " мин назад"; }
+
+async function pollState() {
+  try { view = await api("/api/state"); render(); }
+  catch (e) { showErr(e.message); }
+}
+function showErr(m) { $("err").textContent = m || ""; $("err").classList.toggle("on", !!m); }
+
+function render() {
+  const v = view, st = v.status || null;
+  $("power").className = v.phase;
+  let phase = phaseText[v.phase] || v.phase;
+  if (v.phase === "running" && st && st.state === "down") phase = "Нет связи";
+  $("phase").textContent = phase;
+  let sub = "";
+  if (st && v.phase !== "off") sub = stateText[st.state] || st.state || "";
+  if (v.phase === "off" && !v.ready) sub = "Сначала импортируйте подключение из панели сервера";
+  if (v.network) sub += (sub ? " · " : "") + "сеть: " + v.network;
+  $("sub").textContent = sub;
+  showErr(v.error);
+  const cap = st && st.captcha_needed;
+  $("captcha").classList.toggle("on", !!cap);
+  if (cap && !$("captcha").querySelector("a")) {
+    $("captcha").textContent = "VK просит капчу: ";
+    const a = document.createElement("a");
+    a.target = "_blank"; a.rel = "noreferrer"; a.textContent = "открыть";
+    $("captcha").append(a, " — после неё туннель продолжит сам.");
+  }
+  if (cap) $("captcha").querySelector("a").href = st.captcha_url;
+  ["mode", "mode2"].forEach(id => $(id).querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.mode === v.mode)));
+  $("importBox").classList.toggle("on", !v.ready || importWanted);
+  const cells = [];
+  if (st && v.phase !== "off") {
+    cells.push(["Соединения", (st.conns_active||0) + " / " + (st.conns_configured||0)]);
+    cells.push(["Принято / отправлено", mb(st.wg_rx_bytes||0) + " / " + mb(st.wg_tx_bytes||0)]);
+    cells.push(["Рукопожатие", ago(st.wg_last_handshake)]);
+    cells.push(["Задержка TURN", st.turn_rtt_ms ? Math.round(st.turn_rtt_ms) + " мс" : "—"]);
+  }
+  if (v.phase === "running") {
+    cells.push(["Маршруты", v.static_routes + (v.mode === "domains" ? " + " + v.name_routes + " по именам" : "")]);
+    if (v.dns) cells.push(["DNS через туннель", v.dns.tunneled + " из " + v.dns.queries]);
+  }
+  if (v.mode === "domains") {
+    const n = v.lists.reduce((a, l) => a + l.names, 0), bad = v.lists.filter(l => l.error).length;
+    cells.push(["Списки", v.lists.length + " (" + n + " имён)" + (bad ? " · ошибок " + bad : "")]);
+  }
+  $("stats").replaceChildren(...cells.map(([k, val]) => { const d = document.createElement("div"); d.className = "stat"; d.innerHTML = "<b></b><span></span>"; d.firstChild.textContent = val; d.lastChild.textContent = k; return d; }));
+  if (tab === "settings") renderLists();
+}
+
+$("power").onclick = async () => {
+  try {
+    if (view.phase === "off") {
+      if (!view.ready) { importWanted = true; render(); $("impText").focus(); return; }
+      await api("/api/connect", {});
+    } else await api("/api/disconnect", {});
+    pollState();
+  } catch (e) { showErr(e.message); }
+};
+
+async function setMode(m) {
+  try {
+    const s = await api("/api/settings");
+    s.mode = m; s.private_key = "";
+    await api("/api/settings", s);
+    pollState();
+  } catch (e) { showErr(e.message); $("setErr").textContent = e.message; $("setErr").classList.add("on"); }
+}
+["mode", "mode2"].forEach(id => $(id).querySelectorAll("button").forEach(b => b.onclick = () => { setMode(b.dataset.mode); if (id === "mode2") { settings.mode = b.dataset.mode; modeOpts(); } }));
+
+// --- import ---
+let importWanted = false;
+$("showImport").onclick = () => { importWanted = true; showTab("home"); render(); };
+$("impPaste").onclick = async () => { try { $("impText").value = await navigator.clipboard.readText(); preview(); } catch (e) { $("impPreview").textContent = "Буфер обмена недоступен — вставьте Ctrl+V"; } };
+$("impFileBtn").onclick = () => $("impFile").click();
+$("impFile").onchange = () => { const f = $("impFile").files[0]; if (f) f.text().then(t => { $("impText").value = t; preview(); }); };
+$("impText").oninput = () => preview();
+async function preview() {
+  const t = $("impText").value.trim();
+  if (!t) { $("impPreview").textContent = ""; return; }
+  try {
+    const p = await api("/api/import", {text: t, apply: false});
+    $("impPreview").textContent = (p.name ? "«" + p.name + "»: " : "") + "сервер " + p.peer + ", адрес " + p.address + ", ссылок " + p.links;
+    $("impPreview").classList.remove("bad");
+  } catch (e) { $("impPreview").textContent = e.message; $("impPreview").classList.add("bad"); }
+}
+$("impGo").onclick = async () => {
+  try {
+    await api("/api/import", {text: $("impText").value.trim(), apply: true});
+    importWanted = false; $("impText").value = ""; $("impPreview").textContent = "";
+    pollState();
+  } catch (e) { $("impPreview").textContent = e.message; $("impPreview").classList.add("bad"); }
+};
+
+// --- settings ---
+function lines(s) { return (s || []).join("\n"); }
+function unlines(s) { return s.split(/[\n,]/).map(x => x.trim()).filter(Boolean); }
+async function loadSettings() {
+  try { settings = await api("/api/settings"); } catch (e) { $("setErr").textContent = e.message; $("setErr").classList.add("on"); return; }
+  const s = settings;
+  $("lists").value = lines(s.lists); $("listHours").value = s.list_hours; $("own").value = s.own_domains || "";
+  $("routes").value = s.routes || ""; $("bypass").checked = s.bypass_lan; $("auto").checked = s.auto_connect;
+  $("peer").value = s.peer; $("serverKey").value = s.server_key; $("privKey").value = "";
+  $("privKey").placeholder = s.has_private_key ? "сохранён — не изменён" : "нет ключа — нажмите «Новый ключ»";
+  $("pubKey").textContent = s.public_key || "—"; $("psk").value = s.psk || "";
+  $("links").value = lines(s.links); $("address").value = s.address; $("tdns").value = s.tunnel_dns;
+  $("fdns").value = s.fallback_dns; $("mtu").value = s.mtu; $("conns").value = s.conns; $("tcp").checked = s.tcp;
+  modeOpts(); renderLists();
+}
+function modeOpts() {
+  const m = settings.mode;
+  $("mode2").querySelectorAll("button").forEach(b => b.classList.toggle("on", b.dataset.mode === m));
+  $("domainsOpts").style.display = m === "domains" ? "" : "none";
+  $("routes").parentElement && ($("routes").style.display = m === "all" ? "none" : "");
+  $("routesLabel").style.display = m === "all" ? "none" : "";
+  $("routesLabel").textContent = m === "domains" ? "Подсети в туннель помимо доменов (необязательно)" : "Подсети в туннель (IPv4 CIDR через запятую или строку)";
+  $("bypass").parentElement.style.display = m === "domains" ? "none" : "";
+}
+function renderLists() {
+  if (!view) return;
+  $("listState").replaceChildren(...view.lists.map(l => {
+    const d = document.createElement("div");
+    const when = l.updated && !l.updated.startsWith("0001") ? new Date(l.updated).toLocaleString() : "не загружен";
+    d.textContent = l.url + " — " + (l.names ? l.names + " имён" : "") + (l.other ? ", " + l.other + " шаблонов" : "") + (l.nets ? ", " + l.nets + " подсетей" : "") + " · " + when + (l.error ? " · ошибка: " + l.error : "");
+    if (l.error) d.className = "bad";
+    return d;
+  }));
+}
+$("refresh").onclick = async () => { try { await api("/api/lists/refresh", {}); $("setOk").textContent = "Списки обновляются…"; $("setOk").classList.add("on"); setTimeout(pollState, 3000); } catch (e) { alert(e.message); } };
+$("genkey").onclick = async () => {
+  if (settings.has_private_key && !confirm("Заменить ключ? Сервер перестанет узнавать этот компьютер, пока вы не добавите новый публичный ключ пиром.")) return;
+  try { const r = await api("/api/genkey", {}); $("pubKey").textContent = r.public_key; settings.has_private_key = true; $("privKey").placeholder = "сохранён — не изменён"; }
+  catch (e) { alert(e.message); }
+};
+$("copyPub").onclick = () => navigator.clipboard.writeText($("pubKey").textContent);
+$("save").onclick = async () => {
+  const s = Object.assign({}, settings, {
+    lists: unlines($("lists").value), list_hours: +$("listHours").value || 0, own_domains: $("own").value,
+    routes: $("routes").value, bypass_lan: $("bypass").checked, auto_connect: $("auto").checked,
+    peer: $("peer").value.trim(), server_key: $("serverKey").value.trim(), private_key: $("privKey").value.trim(),
+    psk: $("psk").value.trim(), links: unlines($("links").value), address: $("address").value.trim(),
+    tunnel_dns: $("tdns").value.trim(), fallback_dns: $("fdns").value.trim(), mtu: +$("mtu").value, conns: +$("conns").value, tcp: $("tcp").checked,
+  });
+  try {
+    await api("/api/settings", s);
+    $("setErr").classList.remove("on"); $("setOk").textContent = "Сохранено" + (view && view.phase !== "off" ? " — туннель перезапущен" : ""); $("setOk").classList.add("on");
+    loadSettings(); pollState();
+  } catch (e) { $("setOk").classList.remove("on"); $("setErr").textContent = e.message; $("setErr").classList.add("on"); }
+};
+
+// --- the log: appended, never redrawn; while the reader is scrolled up
+// nothing moves — the new lines wait behind a button. ---
+let logLast = -1, logPending = [], logBusy = false;
+const LOG_KEEP = 2000;
+function atBottom() { const p = $("logPre"); return p.scrollHeight - p.scrollTop - p.clientHeight < 30; }
+function appendLines(ls) {
+  const p = $("logPre");
+  p.append(document.createTextNode(ls.join("\n") + "\n"));
+  // Trim from the top only at the bottom (the reader is not looking there).
+  let extra = p.childNodes.length - LOG_KEEP / 20;
+  while (extra-- > 0) p.firstChild.remove();
+  p.scrollTop = p.scrollHeight;
+}
+async function pollLog() {
+  if (logBusy) return;
+  logBusy = true;
+  try {
+    const r = await api("/api/log?after=" + logLast);
+    logLast = r.last;
+    if (r.lines && r.lines.length) {
+      if (atBottom() && !logPending.length) appendLines(r.lines);
+      else logPending.push(...r.lines);
+    }
+    $("more").style.display = logPending.length ? "block" : "none";
+    $("more").textContent = "↓ новых строк: " + logPending.length;
+  } catch (e) {}
+  logBusy = false;
+}
+$("more").onclick = () => { appendLines(logPending); logPending = []; $("more").style.display = "none"; };
+$("logPre").onscroll = () => { if (atBottom() && logPending.length) $("more").onclick(); };
+
+// --- start ---
+const m = location.hash.match(/import=(.+)/);
+if (m) { importWanted = true; $("impText").value = decodeURIComponent(m[1]); history.replaceState(null, "", "/"); preview(); }
+pollState();
+setInterval(() => { if (tab !== "log") pollState(); else pollLog(); }, 1000);
+</script>
+</body>
+</html>

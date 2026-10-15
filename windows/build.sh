@@ -19,6 +19,7 @@ cache="$here/.cache"
 WINTUN_VERSION=0.14.1
 # https://www.wintun.net/ — "wintun-0.14.1.zip … SHA2-256: 07c2561…"
 WINTUN_SHA256=07c256185d6ee3652e09fa55c0b673e2624b565e02c4b9091c79ca7d2f24ef51
+# what that zip holds: wintun/bin/amd64/wintun.dll sha256 e5da8447dc2c320edc0fc52fa01885c103de8c118481f683643cacc3220dafce
 
 version=$(tr -d ' \n' <"$here/VERSION")
 commit=$(git -C "$root" rev-parse --short=12 HEAD)
@@ -30,10 +31,10 @@ zip="$cache/wintun-$WINTUN_VERSION.zip"
 mkdir -p "$cache"
 if [ ! -f "$zip" ] || [ "$(shasum -a 256 "$zip" | cut -d' ' -f1)" != "$WINTUN_SHA256" ]; then
 	rm -f "$zip.part"
-	# wintun.net can be slow from here: resumed until whole.
-	for _ in $(seq 1 60); do
-		curl -fsSL --retry 3 -C - --max-time 300 -o "$zip.part" "https://www.wintun.net/builds/wintun-$WINTUN_VERSION.zip" && break
-		sleep 2
+	# From here the connection to wintun.net stalls after ~16 KB: short
+	# connections, each resuming where the last stopped, until it is whole.
+	for _ in $(seq 1 200); do
+		curl -fsSL -C - --max-time 15 -o "$zip.part" "https://www.wintun.net/builds/wintun-$WINTUN_VERSION.zip" 2>/dev/null && break
 	done
 	mv "$zip.part" "$zip"
 fi

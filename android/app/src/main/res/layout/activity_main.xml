@@ -49,6 +49,17 @@
             android:layout_height="wrap_content"
             android:text="@string/open_log" />
 
+        <Button
+            android:id="@+id/import_profile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/import_profile" />
+
+        <TextView
+            style="@style/Label"
+            android:layout_marginTop="2dp"
+            android:text="@string/import_hint" />
+
         <!-- Server -->
         <TextView style="@style/Section" android:text="@string/sec_server" />
 

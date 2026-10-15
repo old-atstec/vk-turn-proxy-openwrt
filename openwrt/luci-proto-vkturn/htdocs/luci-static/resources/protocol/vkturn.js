@@ -80,6 +80,104 @@ const cbiKeyPairGenerate = form.DummyValue.extend({
 	}
 });
 
+// A connection issued by the server's panel (vkturn-panel):
+// vkturn://import?c=<base64url(JSON)>, or the .vkturn file's JSON itself.
+function parseProfile(text) {
+	text = (text || '').trim();
+	let json = text;
+	const m = text.match(/vkturn:\/\/import\?c=([A-Za-z0-9_-]+)/);
+
+	if (m) {
+		let b64 = m[1].replace(/-/g, '+').replace(/_/g, '/');
+		while (b64.length % 4)
+			b64 += '=';
+		const bin = atob(b64);
+		const bytes = new Uint8Array(bin.length);
+		for (let i = 0; i < bin.length; i++)
+			bytes[i] = bin.charCodeAt(i);
+		json = new TextDecoder('utf-8').decode(bytes);
+	}
+	else if (text.charAt(0) != '{') {
+		throw new Error(_('Not a vkturn:// link or a .vkturn file'));
+	}
+
+	const p = JSON.parse(json);
+	if (p.v != 1)
+		throw new Error(_('Unsupported profile version: %s').format(p.v));
+	for (const k of [ 'peer', 'server_key', 'private_key', 'address' ])
+		if (typeof(p[k]) != 'string' || p[k] == '')
+			throw new Error(_('The profile lacks %s').format(k));
+	if (!Array.isArray(p.vk_links) || p.vk_links.length == 0)
+		throw new Error(_('The profile has no VK call links'));
+	return p;
+}
+
+// The import box: a link pasted here fills the form; Save applies it.
+const cbiImport = form.DummyValue.extend({
+	cfgvalue(section_id) {
+		return null;
+	},
+
+	renderWidget(section_id) {
+		const area = E('textarea', {
+			'class': 'cbi-input-textarea',
+			'rows': 3,
+			'style': 'width:100%;font-family:monospace',
+			'placeholder': 'vkturn://import?c=…'
+		});
+		const note = E('div', { 'class': 'cbi-value-description' });
+		const section = this.section;
+
+		const set = (name, value) => {
+			const el = section.getUIElement(section_id, name);
+			if (el && value != null && value !== '')
+				el.setValue(value);
+		};
+
+		const apply = () => {
+			let p;
+			try {
+				p = parseProfile(area.value);
+			}
+			catch (e) {
+				note.textContent = e.message;
+				note.style.color = 'red';
+				return;
+			}
+
+			set('peer', p.peer);
+			set('public_key', p.server_key);
+			set('private_key', p.private_key);
+			set('preshared_key', p.psk);
+			set('addresses', [ p.address ]);
+			set('vk_link', p.vk_links);
+			if (p.conns)
+				set('conns', String(p.conns));
+			if (p.transport == 'udp' || p.transport == 'tcp')
+				set('turn_transport', p.transport);
+			if (p.mtu)
+				set('mtu', String(p.mtu));
+
+			const node = document.getElementById('vkturn-pubkey-' + section_id);
+			if (node)
+				callGetPublicKey(p.private_key).then(pub => { node.textContent = pub || '—'; });
+
+			area.value = '';
+			note.style.color = '';
+			note.textContent = (p.name ? _('Imported "%s".').format(p.name) + ' ' : '') +
+				_('The fields below are filled in — press Save & Apply.');
+		};
+
+		return E('div', {}, [
+			area,
+			E('div', { 'style': 'margin-top:4px' }, [
+				E('button', { 'class': 'btn cbi-button-action', 'click': ui.createHandlerFn(this, apply) }, [ _('Import') ])
+			]),
+			note
+		]);
+	}
+});
+
 return network.registerProtocol('vkturn', {
 	getI18n() {
 		return _('VK TURN (WireGuard)');
@@ -111,6 +209,9 @@ return network.registerProtocol('vkturn', {
 
 	renderFormOptions(s) {
 		let o;
+
+		s.taboption('general', cbiImport, '_import', _('Import'),
+			_('A connection from the server panel: paste its <code>vkturn://</code> link (or the <code>.vkturn</code> file) and press Import.'));
 
 		o = s.taboption('general', form.Value, 'peer', _('Server'),
 			_('The server\'s SRTP listener (vk-turn-proxy server, <code>-srtp</code>): <code>host:port</code>.'));

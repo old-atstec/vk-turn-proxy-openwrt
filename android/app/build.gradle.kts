@@ -72,5 +72,9 @@ android {
 }
 
 dependencies {
+    // The QR decoder: plain Java, no AndroidX.
+    implementation("com.google.zxing:core:3.5.3")
     testImplementation("junit:junit:4.13.2")
+    // The real org.json: the android.jar's is a stub in unit tests (ProfileImportTest).
+    testImplementation("org.json:json:20240303")
 }

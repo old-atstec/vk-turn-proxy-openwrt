@@ -107,6 +107,21 @@ daemon_targets() {
 run "vk-turn-proxyd — built and vetted for the router targets" \
     daemon_targets
 
+# The packaging scripts: build.sh carries its container script in single
+# quotes, and an apostrophe in a comment there broke the build twice.
+shell_scripts() {
+    local ok=0 f
+    for f in openwrt/build.sh openwrt/package-native.sh tools/test.sh; do
+        bash -n "$f" || { echo "   $f does not parse"; ok=1; }
+    done
+    for f in openwrt/vk-turn-proxy/files/vkturn.sh openwrt/vk-turn-proxy/files/vkturn-notify.sh; do
+        sh -n "$f" || { echo "   $f does not parse"; ok=1; }
+    done
+    return $ok
+}
+run "packaging and netifd scripts parse" \
+    shell_scripts
+
 echo
 if [ "$fail" = 0 ]; then
     echo "all suites passed"

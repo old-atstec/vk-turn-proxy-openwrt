@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"go/ast"
 	"go/parser"
@@ -450,21 +452,21 @@ func TestTheCredentialCacheFollowsTheCallLink(t *testing.T) {
 	exists := func() bool { _, err := os.Stat(cache); return err == nil }
 
 	write() // a cache from before the fingerprint: its link is unknown
-	if dropped, err := matchCacheToLink(cache, a); err != nil || !dropped || exists() {
+	if dropped, err := matchCacheToLinks(cache, []string{a}); err != nil || !dropped || exists() {
 		t.Fatalf("an unfingerprinted cache: dropped=%v err=%v exists=%v, want it dropped", dropped, err, exists())
 	}
 	write()
-	if dropped, err := matchCacheToLink(cache, a); err != nil || dropped || !exists() {
+	if dropped, err := matchCacheToLinks(cache, []string{a}); err != nil || dropped || !exists() {
 		t.Fatalf("the same link: dropped=%v err=%v exists=%v, want the cache kept", dropped, err, exists())
 	}
-	if dropped, err := matchCacheToLink(cache, b); err != nil || !dropped || exists() {
+	if dropped, err := matchCacheToLinks(cache, []string{b}); err != nil || !dropped || exists() {
 		t.Fatalf("a new link: dropped=%v err=%v exists=%v, want the cache dropped", dropped, err, exists())
 	}
 	mark, _ := os.ReadFile(cache + ".link")
 	if strings.Contains(string(mark), "BBBB") || len(strings.TrimSpace(string(mark))) != 64 {
 		t.Fatalf("fingerprint = %q", mark)
 	}
-	if dropped, err := matchCacheToLink(filepath.Join(dir, "none.json"), a); err != nil || dropped {
+	if dropped, err := matchCacheToLinks(filepath.Join(dir, "none.json"), []string{a}); err != nil || dropped {
 		t.Fatalf("no cache at all: dropped=%v err=%v", dropped, err)
 	}
 }
@@ -526,5 +528,19 @@ func TestAStaleHandshakeWithSessionsUpReconnectsAtMostEveryKickEvery(t *testing.
 	}
 	if !needKick(up, stale, now.Add(-kickEvery), now) {
 		t.Fatal("no kick kickEvery after the last one")
+	}
+}
+
+// One link keeps the fingerprint of the releases before several (sha256 of
+// the link), so an upgrade keeps its cache; another order of the same links
+// is another fingerprint (slot i mints from link i mod N).
+func TestTheLinksFingerprint(t *testing.T) {
+	a, b := "https://vk.ru/call/join/aaaaaa", "https://vk.ru/call/join/bbbbbb"
+	old := sha256.Sum256([]byte(a))
+	if linksFingerprint([]string{a}) != hex.EncodeToString(old[:]) {
+		t.Fatal("one link's fingerprint changed: an upgrade would drop the cache")
+	}
+	if linksFingerprint([]string{a, b}) == linksFingerprint([]string{b, a}) {
+		t.Fatal("the order of the links is not in the fingerprint")
 	}
 }

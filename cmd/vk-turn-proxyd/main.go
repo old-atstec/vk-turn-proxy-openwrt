@@ -92,9 +92,6 @@ func realMain(args []string, stdin *os.File, stdout *os.File) int {
 		return 2
 	}
 	setupLog(os.Stderr, c.Debug)
-	if len(c.VKLinks) > 1 && c.CookieFile == "" {
-		log.Printf("config: %d call links given; the anonymous mode mints from the first one only (openwrt/TODO.md)", len(c.VKLinks))
-	}
 	if *check {
 		fmt.Fprintln(stdout, "config OK")
 		return 0

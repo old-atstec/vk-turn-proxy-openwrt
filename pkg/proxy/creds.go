@@ -185,6 +185,7 @@ type TURNCreds struct {
 	Password  string
 	Address   string   // host:port — primary address (= Addresses[0])
 	Addresses []string // all VK-returned TURN endpoints, len >= 1
+	Link      int      // the call link it was minted from: an index into Config.VKLinks (links.go)
 }
 
 // isTransientNetworkError reports whether err looks like a transient network
@@ -1191,6 +1192,9 @@ type credCacheEntry struct {
 	// Addresses is the credential's whole turn_server.urls (Config.SpreadRelays
 	// dials them all); absent in files from before it — Address alone then.
 	Addresses []string `json:"addresses,omitempty"`
+	// Link is the call link it was minted from, by position (links.go); 0 in
+	// files from before it — they were all the first link's.
+	Link int `json:"link,omitempty"`
 	// LastUsedAt is the most recent moment a conn was holding a TURN
 	// allocation against this cred (Unix seconds, 0 = never used in
 	// this session). Drives the per-entry saturation-cooldown check
@@ -1780,6 +1784,7 @@ func (cp *credPool) loadFromDisk() {
 			Password:  entry.Password,
 			Address:   entry.Address,
 			Addresses: cachedAddresses(entry),
+			Link:      entry.Link,
 		}
 		exp, ok := parseCredExpiry(creds.Username)
 		if !ok {
@@ -1885,6 +1890,7 @@ func (cp *credPool) saveToDisk() {
 			Slot:       slot,
 			Address:    entry.addr,
 			Addresses:  entry.creds.Addresses,
+			Link:       entry.creds.Link,
 			Username:   entry.creds.Username,
 			Password:   entry.creds.Password,
 			LastUsedAt: lastUsed,

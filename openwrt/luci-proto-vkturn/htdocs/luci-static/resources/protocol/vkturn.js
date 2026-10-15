@@ -144,12 +144,12 @@ return network.registerProtocol('vkturn', {
 		o.rmempty = false;
 
 		o = s.taboption('general', form.DynamicList, 'vk_link', _('VK call links'),
-			_('A VK call link the TURN credentials are minted from. The anonymous mode uses the first one.'));
+			_('VK call links the TURN credentials are minted from. With several, the credentials alternate between them and a call VK closes is covered by the others: a reserve.'));
 		o.validate = validateVKLink;
 		o.rmempty = false;
 
 		o = s.taboption('general', form.Value, 'conns', _('Connections'),
-			_('TURN allocations, 1…120. Up to 20 per call link are known to work.'));
+			_('TURN allocations, 1…120. Each carries ~2 Mbit/s (the server paces it under VK\'s per-allocation limit): 60 is ~95 Mbit/s.'));
 		o.datatype = 'range(1,120)';
 		o.placeholder = '20';
 

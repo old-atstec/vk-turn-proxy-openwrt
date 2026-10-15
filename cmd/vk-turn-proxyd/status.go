@@ -54,6 +54,10 @@ type status struct {
 	WAN              string  `json:"wan,omitempty"`
 	UptimeSec        int64   `json:"proxy_uptime_sec"`
 	DownAfterSeconds int     `json:"down_after"`
+
+	// Links is per call link, by position: mints, failures, dead_for_sec (VK
+	// said the call is gone), creds and active connections on it.
+	Links []proxy.LinkStats `json:"links,omitempty"`
 }
 
 // fill copies the proxy's counters in.
@@ -70,6 +74,7 @@ func (s *status) fill(ps proxy.Stats, wg wgState) {
 	s.CaptchaURL = ps.CaptchaImageURL
 	s.AuthError = ps.AuthError
 	s.UptimeSec = ps.TunnelUptimeSec
+	s.Links = ps.Links
 	s.WGTxBytes, s.WGRxBytes = wg.txBytes, wg.rxBytes
 	s.WGLastHandshake = 0
 	if !wg.lastHandshake.IsZero() {

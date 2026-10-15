@@ -112,7 +112,7 @@ func (d *daemon) run(ctx context.Context) int {
 		if err := prepareDir(filepath.Dir(d.c.CredCache)); err != nil {
 			return d.fail("cred_cache: %v", err)
 		}
-		if dropped, err := matchCacheToLink(d.c.CredCache, d.c.VKLinks[0]); err != nil {
+		if dropped, err := matchCacheToLinks(d.c.CredCache, d.c.VKLinks); err != nil {
 			return d.fail("cred_cache: %v", err)
 		} else if dropped {
 			log.Print("the call link changed: the credential cache of the old one is dropped")
@@ -197,14 +197,13 @@ func prepareDir(dir string) error {
 	return nil
 }
 
-// matchCacheToLink keeps the credential cache only while the call link it was
-// minted from is the one configured: the cache itself does not name its link,
-// and a link changed in LuCI must not go on running on the old call's
-// credentials. The link's fingerprint (never the link) is kept beside the
-// cache as <cache>.link. Reports whether a cache was dropped.
-func matchCacheToLink(cache, link string) (bool, error) {
-	sum := sha256.Sum256([]byte(link))
-	want := hex.EncodeToString(sum[:])
+// matchCacheToLinks keeps the credential cache only while the call links it
+// was minted from are the ones configured: a link changed in LuCI must not go
+// on running on the old call's credentials. Their fingerprint (never a link,
+// linksFingerprint) is kept beside the cache as <cache>.link. Reports whether
+// a cache was dropped.
+func matchCacheToLinks(cache string, links []string) (bool, error) {
+	want := linksFingerprint(links)
 	mark := cache + ".link"
 	have, err := os.ReadFile(mark)
 	if err == nil && strings.TrimSpace(string(have)) == want {
@@ -299,6 +298,7 @@ func (d *daemon) startProxy() {
 		TurnServer:    c.TurnServer,
 		TurnPort:      c.TurnPort,
 		VKLink:        c.VKLinks[0],
+		VKLinks:       c.VKLinks,
 		UseDTLS:       true,
 		UseSrtp:       true,
 		UseUDP:        c.UseUDP,
@@ -354,6 +354,11 @@ func (d *daemon) waitFirstSession(ctx context.Context) error {
 			}
 			var dead *proxy.CallUnavailableError
 			if errors.As(err, &dead) {
+				// The proxy moves on to the next link by itself; this reaches
+				// here only when every link is dead.
+				if len(d.c.VKLinks) > 1 {
+					return fmt.Errorf("every call link is dead (the last: VK %d: %s) — make new calls and set vk_link", dead.Code, dead.Message)
+				}
 				return fmt.Errorf("the call link is dead (VK %d: %s) — make a new call and set vk_link", dead.Code, dead.Message)
 			}
 			d.lastErr = err.Error()
@@ -619,4 +624,13 @@ func transportName(udp bool) string {
 		return "udp"
 	}
 	return "tcp"
+}
+
+// linksFingerprint is what creds.json.link holds: sha256 of the link, or of
+// the links joined by newlines when there are several — one link keeps the
+// fingerprint of the releases before several, so an upgrade keeps its cache.
+// The order counts: slot i mints from link i mod N.
+func linksFingerprint(links []string) string {
+	sum := sha256.Sum256([]byte(strings.Join(links, "\n")))
+	return hex.EncodeToString(sum[:])
 }

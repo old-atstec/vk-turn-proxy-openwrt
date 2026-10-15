@@ -29,6 +29,11 @@
         </activity>
 
         <activity
+            android:name=".LogActivity"
+            android:exported="false"
+            android:label="@string/log_title" />
+
+        <activity
             android:name=".AppsActivity"
             android:exported="false"
             android:label="@string/apps_title" />

@@ -11,10 +11,18 @@ PKG_NAME:=vk-turn-proxy
 PKG_VERSION:=0.1.0
 PKG_RELEASE:=1
 
-PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/old-atstec/vk-turn-proxy-openwrt.git
-PKG_SOURCE_VERSION:=COMMIT_PLACEHOLDER
-PKG_MIRROR_HASH:=skip
+# VKTURN_SRC (openwrt/build.sh): a local tree instead of the pinned commit,
+# VKTURN_COMMIT its commit for the version string. Variables of our own: a
+# USE_SOURCE_DIR on make's command line would reach every package built.
+ifneq ($(VKTURN_SRC),)
+  USE_SOURCE_DIR:=$(VKTURN_SRC)
+  PKG_SOURCE_VERSION:=$(VKTURN_COMMIT)
+else
+  PKG_SOURCE_PROTO:=git
+  PKG_SOURCE_URL:=https://github.com/old-atstec/vk-turn-proxy-openwrt.git
+  PKG_SOURCE_VERSION:=COMMIT_PLACEHOLDER
+  PKG_MIRROR_HASH:=skip
+endif
 
 PKG_LICENSE:=GPL-3.0-only
 PKG_LICENSE_FILES:=LICENSE

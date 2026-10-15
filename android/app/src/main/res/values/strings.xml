@@ -37,4 +37,10 @@
     <string name="search">Поиск</string>
     <string name="apps_loading">Загрузка списка приложений…</string>
     <string name="apps_none">Ничего не найдено</string>
+    <string name="import_profile">Импорт подключения</string>
+    <string name="import_hint">QR-код, ссылка vkturn:// или файл .vkturn из панели сервера — все поля ниже заполнятся сами</string>
+    <string name="scan_title">QR-код подключения</string>
+    <string name="scan_hint">Наведите камеру на QR-код в панели сервера</string>
+    <string name="scan_no_camera">Без доступа к камере QR-код не прочитать — используйте ссылку или файл</string>
+    <string name="scan_not_ours">Это не QR-код подключения VK TURN</string>
 </resources>

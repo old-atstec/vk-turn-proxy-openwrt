@@ -24,6 +24,9 @@ import kotlin.concurrent.thread
 class MainActivity : Activity() {
     companion object {
         private const val REQ_VPN = 1
+        private const val REQ_SCAN = 2
+        private const val REQ_FILE = 3
+        private const val MAX_FILE = 64 * 1024
     }
 
     private lateinit var files: Files
@@ -49,6 +52,7 @@ class MainActivity : Activity() {
             startActivity(Intent(this, AppsActivity::class.java))
         }
         f<Button>(R.id.open_log).setOnClickListener { startActivity(Intent(this, LogActivity::class.java)) }
+        f<Button>(R.id.import_profile).setOnClickListener { chooseImport() }
         f<Button>(R.id.captcha).setOnClickListener {
             val url = Tunnel.status?.optString("captcha_url").orEmpty()
             if (url.startsWith("https://")) startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
@@ -58,6 +62,12 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
         }
+        if (savedInstanceState == null) handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
     }
 
     override fun onResume() {
@@ -207,8 +217,117 @@ class MainActivity : Activity() {
 
     @Deprecated("the framework Activity's")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        if (requestCode == REQ_VPN && resultCode == RESULT_OK) VkTurnService.start(this)
-        else if (requestCode == REQ_VPN) toast("Без разрешения на VPN туннель не поднять")
+        when (requestCode) {
+            REQ_VPN ->
+                if (resultCode == RESULT_OK) VkTurnService.start(this)
+                else toast("Без разрешения на VPN туннель не поднять")
+            REQ_SCAN -> data?.getStringExtra(ScanActivity.EXTRA_TEXT)?.takeIf { resultCode == RESULT_OK }?.let { offerImport(it) }
+            REQ_FILE -> data?.data?.takeIf { resultCode == RESULT_OK }?.let { importUri(it) }
+        }
+    }
+
+    // --- import: the server panel's QR code, link or .vkturn file (ProfileImport) ---
+
+    private fun chooseImport() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.import_profile)
+            .setItems(arrayOf("Сканировать QR-код", "Вставить ссылку из буфера", "Открыть файл .vkturn")) { _, which ->
+                when (which) {
+                    0 -> startActivityForResult(Intent(this, ScanActivity::class.java), REQ_SCAN)
+                    1 -> {
+                        val clip = getSystemService(ClipboardManager::class.java).primaryClip
+                        val text = clip?.takeIf { it.itemCount > 0 }?.getItemAt(0)?.coerceToText(this)?.toString()
+                        if (text.isNullOrBlank()) toast("Буфер обмена пуст — скопируйте ссылку vkturn:// из панели") else offerImport(text)
+                    }
+                    2 -> startActivityForResult(
+                        Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"),
+                        REQ_FILE,
+                    )
+                }
+            }
+            .show()
+    }
+
+    /** A vkturn:// link opened from elsewhere (a messenger, the camera app), a shared text or file. */
+    private fun handleIntent(i: Intent?) {
+        when (i?.action) {
+            Intent.ACTION_VIEW -> {
+                val u = i.data ?: return
+                if (u.scheme == "vkturn") offerImport(u.toString()) else importUri(u)
+            }
+            Intent.ACTION_SEND -> {
+                i.getStringExtra(Intent.EXTRA_TEXT)?.let { return offerImport(it) }
+                @Suppress("DEPRECATION")
+                (i.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri)?.let { importUri(it) }
+            }
+            else -> return
+        }
+        // Handled once: a rotation must not offer it again.
+        setIntent(Intent(this, MainActivity::class.java))
+    }
+
+    private fun importUri(u: Uri) = thread {
+        val text = try {
+            contentResolver.openInputStream(u)?.use { s ->
+                // readNBytes is API 33: by hand, and never more than a profile could be.
+                val out = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(8192)
+                while (out.size() <= MAX_FILE) {
+                    val n = s.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                }
+                if (out.size() > MAX_FILE) null else out.toString("UTF-8")
+            }
+        } catch (e: Exception) {
+            null
+        }
+        runOnUiThread { if (text == null) toast("Не удалось прочитать файл") else offerImport(text) }
+    }
+
+    private fun offerImport(text: String) {
+        val imp = try {
+            ProfileImport.parse(text, read())
+        } catch (e: IllegalArgumentException) {
+            return toast(e.message ?: "Не удалось импортировать")
+        }
+        imp.settings.validate()?.let { return toast("Подключение с ошибкой: $it") }
+        val running = Tunnel.phase != Tunnel.Phase.OFF
+        val msg = buildString {
+            append("Сервер: ${imp.settings.peer}\n")
+            append("Адрес в туннеле: ${imp.settings.address}\n")
+            append("Ссылок на звонки: ${imp.settings.links.size}\n\n")
+            append("Сервер, ключи и ссылки будут заменены. Маршруты и выбор приложений останутся прежними.")
+            if (running) append("\n\nТуннель сейчас включён — он переподключится.")
+        }
+        AlertDialog.Builder(this)
+            .setTitle(if (imp.name.isNotEmpty()) "Импорт «${imp.name}»" else "Импорт подключения")
+            .setMessage(msg)
+            .setPositiveButton(if (running) "Переподключить" else "Подключить") { _, _ -> applyImport(imp.settings, connect = true) }
+            .setNeutralButton("Только сохранить") { _, _ -> applyImport(imp.settings, connect = false) }
+            .setNegativeButton("Отмена", null)
+            .show()
+    }
+
+    private fun applyImport(s: Settings, connect: Boolean) {
+        s.save(this)
+        fill(s)
+        showPublicKey(s.privateKey)
+        f<android.widget.ScrollView>(R.id.scroll).smoothScrollTo(0, 0)
+        if (!connect) return toast("Подключение сохранено")
+        if (Tunnel.phase != Tunnel.Phase.OFF) {
+            // The daemon reads its config once: off, then on with the new one.
+            VkTurnService.stop(this)
+            Tunnel.listen(object : () -> Unit {
+                override fun invoke() {
+                    if (Tunnel.phase != Tunnel.Phase.OFF) return
+                    Tunnel.unlisten(this)
+                    runOnUiThread { toggle() }
+                }
+            })
+        } else {
+            toggle()
+        }
     }
 
     // --- state ---

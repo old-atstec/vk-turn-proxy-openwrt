@@ -51,7 +51,20 @@ netifd читает обработчики протоколов только п�
 
 ## Настройка
 
-LuCI → Network → Interfaces → Add new interface → протокол **VK TURN (WireGuard)**. Или UCI:
+LuCI → Network → Interfaces → Add new interface → протокол **VK TURN (WireGuard)**.
+
+Если на сервере стоит панель `vkturn-panel` (anton48/vk-turn-proxy, каталог `panel/`), поля
+заполнять не нужно, есть два способа:
+
+- **LuCI:** вставьте ссылку `vkturn://import?c=…` со страницы подключения в поле **Import** вверху
+  вкладки General → Import → Save & Apply. Заполнятся сервер, ключи, preshared key, адрес, ссылки
+  на звонки, число соединений, транспорт и MTU.
+- **SSH:** «Скопировать скрипт» на странице подключения и вставьте его в консоль роутера (или
+  `sh vkturn-<имя>.sh`). Скрипт пересоздаёт секцию `network.vkturn` через `uci` и делает
+  `ifup vkturn`. Если netifd ещё не знает протокол (первая установка), скрипт напомнит о
+  `service network restart`.
+
+Или UCI вручную:
 
 ```
 config interface 'vkturn'

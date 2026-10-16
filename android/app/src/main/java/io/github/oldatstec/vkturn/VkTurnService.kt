@@ -92,8 +92,15 @@ class VkTurnService : VpnService() {
             return START_NOT_STICKY
         }
         // ACTION_START from the screen, android.net.VpnService from always-on.
-        foreground("Подключение…")
-        if (proc == null && !stopping) begin()
+        // Whatever throws on the way up — a vendor's notification or VPN
+        // quirk — is an error on the screen and a report, not a closed app.
+        try {
+            foreground("Подключение…")
+            if (proc == null && !stopping) begin()
+        } catch (e: Throwable) {
+            CrashLog.writeException(this, Thread.currentThread(), e)
+            fail("Не удалось запустить: ${e.javaClass.simpleName}: ${e.message} — отчёт во вкладке «Журнал»")
+        }
         return START_STICKY
     }
 
@@ -113,6 +120,7 @@ class VkTurnService : VpnService() {
         if (!files.daemon.canExecute()) return fail("В пакете нет демона для этой архитектуры (${Build.SUPPORTED_ABIS.joinToString()})")
 
         Tunnel.clearLog()
+        Tunnel.applied = settings
         Tunnel.setPhase(Tunnel.Phase.STARTING, null)
         stopping = false
         lastState = ""
@@ -162,6 +170,7 @@ class VkTurnService : VpnService() {
         proc = null
         if (stopping) return
         val why = if (code > 128) "убит сигналом ${code - 128}" else "код $code"
+        CrashLog.writeDaemonExit(this, why)
         fail("Демон остановился ($why): ${Tunnel.lastLog() ?: "—"}")
     }
 
@@ -408,6 +417,7 @@ class VkTurnService : VpnService() {
                 tun = null
                 server = null
                 listenSock = null
+                Tunnel.applied = null
                 Tunnel.setPhase(Tunnel.Phase.OFF, err)
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf()

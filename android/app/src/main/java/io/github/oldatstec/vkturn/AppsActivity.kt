@@ -45,6 +45,7 @@ class AppsActivity : Activity() {
             if (!selected.remove(a.pkg)) selected += a.pkg
             Settings.saveApps(this, selected.toSet())
             adapter.notifyDataSetChanged()
+            hintReconnect()
         }
         findViewById<EditText>(R.id.search).addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -53,6 +54,24 @@ class AppsActivity : Activity() {
         })
         findViewById<CheckBox>(R.id.show_system).setOnCheckedChangeListener { _, _ -> filter() }
         load()
+    }
+
+    private var hinted = false
+
+    /**
+     * The VPN's app list is fixed when it is established: a change while the
+     * tunnel runs needs a reconnect. Said once here, and the main screen keeps
+     * a "Переподключить" banner until it is done.
+     */
+    private fun hintReconnect() {
+        val applied = Tunnel.applied ?: return
+        if (hinted || Tunnel.phase == Tunnel.Phase.OFF || applied.apps == selected) return
+        hinted = true
+        android.widget.Toast.makeText(
+            this,
+            "Применится после переподключения — кнопка на «Главной»",
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
     }
 
     private fun load() = thread {

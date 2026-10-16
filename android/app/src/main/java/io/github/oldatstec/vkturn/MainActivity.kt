@@ -27,9 +27,16 @@ class MainActivity : Activity() {
         private const val REQ_SCAN = 2
         private const val REQ_FILE = 3
         private const val MAX_FILE = 64 * 1024
+        private const val TAB_HOME = 0
+        private const val TAB_SETTINGS = 1
+        private const val TAB_LOG = 2
+        const val EXTRA_TAB = "tab"
     }
 
     private lateinit var files: Files
+    private lateinit var logTab: LogTab
+    private var tab = TAB_HOME
+    private var crashesUnseen = 0
     private val v = mutableMapOf<Int, View>()
     private inline fun <reified T : View> f(id: Int): T = v.getOrPut(id) { findViewById(id) } as T
 
@@ -51,18 +58,59 @@ class MainActivity : Activity() {
             save()
             startActivity(Intent(this, AppsActivity::class.java))
         }
-        f<Button>(R.id.open_log).setOnClickListener { startActivity(Intent(this, LogActivity::class.java)) }
         f<Button>(R.id.import_profile).setOnClickListener { chooseImport() }
         f<Button>(R.id.captcha).setOnClickListener {
             val url = Tunnel.status?.optString("captcha_url").orEmpty()
             if (url.startsWith("https://")) startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
         }
-        f<RadioGroup>(R.id.split).setOnCheckedChangeListener { _, _ -> renderApps() }
+        f<RadioGroup>(R.id.split).setOnCheckedChangeListener { _, _ ->
+            renderApps()
+            save()
+            render()
+        }
+
+        logTab = LogTab(this)
+        f<Button>(R.id.tab_home).setOnClickListener { showTab(TAB_HOME) }
+        f<Button>(R.id.tab_settings).setOnClickListener { showTab(TAB_SETTINGS) }
+        f<Button>(R.id.tab_log).setOnClickListener { showTab(TAB_LOG) }
+        f<TextView>(R.id.crash_banner).setOnClickListener { showTab(TAB_LOG) }
+        f<Button>(R.id.reconnect).setOnClickListener { reconnect() }
+        showTab(savedInstanceState?.getInt(EXTRA_TAB) ?: intent.getIntExtra(EXTRA_TAB, TAB_HOME), resumed = false)
+
+        // What the system kept of a previous process's death: once per exit.
+        thread {
+            CrashLog.collectExitReasons(this)
+            runOnUiThread { render() }
+        }
 
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 0)
         }
         if (savedInstanceState == null) handleIntent(intent)
+    }
+
+    override fun onSaveInstanceState(out: Bundle) {
+        super.onSaveInstanceState(out)
+        out.putInt(EXTRA_TAB, tab)
+    }
+
+    // --- tabs ---
+
+    private fun showTab(t: Int, resumed: Boolean = true) {
+        if (tab == TAB_SETTINGS && t != TAB_SETTINGS) save()
+        if (tab == TAB_LOG && t != TAB_LOG) logTab.hide()
+        tab = t
+        f<View>(R.id.page_home).visibility = if (t == TAB_HOME) View.VISIBLE else View.GONE
+        f<View>(R.id.scroll).visibility = if (t == TAB_SETTINGS) View.VISIBLE else View.GONE
+        f<View>(R.id.page_log).visibility = if (t == TAB_LOG) View.VISIBLE else View.GONE
+        for ((id, i) in listOf(R.id.tab_home to TAB_HOME, R.id.tab_settings to TAB_SETTINGS, R.id.tab_log to TAB_LOG)) {
+            f<Button>(id).apply {
+                alpha = if (i == t) 1f else 0.55f
+                setTypeface(null, if (i == t) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            }
+        }
+        if (t == TAB_LOG && resumed) logTab.show()
+        if (resumed) render()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -78,11 +126,13 @@ class MainActivity : Activity() {
         renderApps()
         showPublicKey(f<EditText>(R.id.private_key).text.toString().trim())
         Tunnel.listen(redraw)
+        if (tab == TAB_LOG) logTab.show()
         render()
     }
 
     override fun onPause() {
         Tunnel.unlisten(redraw)
+        logTab.hide()
         save()
         super.onPause()
     }
@@ -313,21 +363,23 @@ class MainActivity : Activity() {
         s.save(this)
         fill(s)
         showPublicKey(s.privateKey)
-        f<android.widget.ScrollView>(R.id.scroll).smoothScrollTo(0, 0)
+        showTab(TAB_HOME)
         if (!connect) return toast("Подключение сохранено")
-        if (Tunnel.phase != Tunnel.Phase.OFF) {
-            // The daemon reads its config once: off, then on with the new one.
-            VkTurnService.stop(this)
-            Tunnel.listen(object : () -> Unit {
-                override fun invoke() {
-                    if (Tunnel.phase != Tunnel.Phase.OFF) return
-                    Tunnel.unlisten(this)
-                    runOnUiThread { toggle() }
-                }
-            })
-        } else {
-            toggle()
-        }
+        if (Tunnel.phase != Tunnel.Phase.OFF) reconnect() else toggle()
+    }
+
+    /** The daemon reads its config once: off, then on with what the form holds now. */
+    private fun reconnect() {
+        save()
+        if (Tunnel.phase == Tunnel.Phase.OFF) return toggle()
+        VkTurnService.stop(this)
+        Tunnel.listen(object : () -> Unit {
+            override fun invoke() {
+                if (Tunnel.phase != Tunnel.Phase.OFF) return
+                Tunnel.unlisten(this)
+                runOnUiThread { toggle() }
+            }
+        })
     }
 
     // --- state ---
@@ -351,7 +403,33 @@ class MainActivity : Activity() {
         }
         f<TextView>(R.id.details).show(details(st))
         val captcha = if (st?.optBoolean("captcha_needed") == true && st.optString("captcha_url").startsWith("https://")) View.VISIBLE else View.GONE
-        if (f<Button>(R.id.captcha).visibility != captcha) f<Button>(R.id.captcha).visibility = captcha
+        f<Button>(R.id.captcha).visibleIf(captcha == View.VISIBLE)
+
+        // The running tunnel took its settings at the start: the form left them?
+        val form = read()
+        val stale = Tunnel.phase != Tunnel.Phase.OFF && Tunnel.applied.let { it != null && it != form }
+        f<View>(R.id.reconnect_banner).visibleIf(stale && Tunnel.phase != Tunnel.Phase.STOPPING)
+        f<View>(R.id.settings_banner).visibleIf(stale)
+        f<TextView>(R.id.summary).show(summary(form))
+
+        if (tab != TAB_LOG) crashesUnseen = CrashLog.unseen(this)
+        f<View>(R.id.crash_banner).visibleIf(crashesUnseen > 0)
+        f<Button>(R.id.tab_log).show(if (crashesUnseen > 0) "Журнал ●" else getString(R.string.tab_log))
+    }
+
+    private fun View.visibleIf(on: Boolean) {
+        val v = if (on) View.VISIBLE else View.GONE
+        if (visibility != v) visibility = v
+    }
+
+    private fun summary(s: Settings): String {
+        if (s.peer.isEmpty()) return "Сервер не задан — импортируйте подключение или заполните «Настройки»."
+        val split = when (s.split) {
+            SplitMode.ALL -> "все приложения"
+            SplitMode.ONLY -> "только выбранные (${s.apps.size})"
+            SplitMode.EXCEPT -> "все, кроме выбранных (${s.apps.size})"
+        }
+        return "Сервер ${s.peer} · в туннеле: $split"
     }
 
     private fun stateWord(st: JSONObject?): String? = when (st?.optString("state")) {

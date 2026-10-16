@@ -13,6 +13,7 @@
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
+        android:name=".App"
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:icon="@mipmap/ic_launcher"
@@ -57,10 +58,13 @@
             android:label="@string/scan_title"
             android:screenOrientation="portrait" />
 
-        <activity
-            android:name=".LogActivity"
+
+        <!-- The report file "Отправить" shares (ReportProvider): to the chosen app only. -->
+        <provider
+            android:name=".ReportProvider"
+            android:authorities="${applicationId}.reports"
             android:exported="false"
-            android:label="@string/log_title" />
+            android:grantUriPermissions="true" />
 
         <activity
             android:name=".AppsActivity"

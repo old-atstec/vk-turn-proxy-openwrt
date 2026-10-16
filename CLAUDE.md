@@ -11,6 +11,7 @@
 | [router-install](.claude/skills/router-install/SKILL.md) | первая установка на роутер и настройка интерфейса |
 | [router-update](.claude/skills/router-update/SKILL.md) | обновление пакетов, после sysupgrade, удаление |
 | [android-release](.claude/skills/android-release/SKILL.md) | сборка APK, версия, установка на телефон/эмулятор |
+| [windows-release](.claude/skills/windows-release/SKILL.md) | zip для Windows x64, версия, wintun, разработка на Mac, проверка на ПК |
 | [connect-device](.claude/skills/connect-device/SKILL.md) | импорт профиля из панели сервера, «нет связи» |
 
 Сервер и панель выдачи подключений (`vkturn-panel`) — в репозитории **vk-turn-proxy**
